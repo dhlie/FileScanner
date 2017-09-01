@@ -102,7 +102,7 @@ void onFinish() {
     isScaning = 0;
 }
 
-char *jStringToStr(JNIEnv *env, jstring jstr) {
+char* jStringToStr(JNIEnv *env, jstring jstr) {
     int length = (*env)->GetStringUTFLength(env, jstr);
     if (length == 0) return 0;
     const char* str = (*env)->GetStringUTFChars(env, jstr, 0);

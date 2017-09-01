@@ -1,8 +1,8 @@
 #ifndef __FILESCANNER__
 #define __FILESCANNER__
 
-#define AND_DEBUG   1
-#define DEBUG       1
+#define AND_DEBUG   0
+#define DEBUG       0
 
 #if AND_DEBUG
 #include <android/log.h>

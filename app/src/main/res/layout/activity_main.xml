@@ -26,31 +26,42 @@
         android:layout_height="wrap_content"
         android:layout_alignParentRight="true"
         android:padding="10dp"
-        android:text="dfdf"
         />
 
     <EditText
         android:id="@+id/et_thd"
-        android:layout_width="80dp"
+        android:layout_width="wrap_content"
         android:layout_height="40dp"
         android:layout_below="@+id/tv_start"
         android:inputType="number"
-        android:hint="线程数"/>
+        android:textSize="10sp"
+        android:hint="thread count"/>
     <EditText
         android:id="@+id/et_depth"
-        android:layout_width="80dp"
+        android:layout_width="wrap_content"
         android:layout_height="40dp"
         android:layout_toRightOf="@+id/et_thd"
-        android:layout_marginLeft="20dp"
+        android:layout_marginLeft="8dp"
         android:layout_below="@+id/tv_start"
         android:inputType="number"
-        android:hint="扫描层级"/>
+        android:textSize="10sp"
+        android:hint="scan depth"/>
+
+    <CheckBox
+        android:id="@+id/cb_detail"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_alignBottom="@+id/et_thd"
+        android:text="detail"
+        android:textSize="10sp"
+        android:layout_toRightOf="@+id/et_depth"
+        android:layout_marginLeft="8dp"/>
     <Button
         android:id="@+id/tv_reset"
         android:layout_width="80dp"
         android:layout_height="40dp"
-        android:layout_toRightOf="@+id/et_depth"
-        android:layout_marginLeft="20dp"
+        android:layout_toRightOf="@+id/cb_detail"
+        android:layout_marginLeft="8dp"
         android:layout_below="@+id/tv_start"
         android:text="Set"
         />
@@ -60,6 +71,7 @@
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         android:layout_below="@+id/et_thd"
+        android:fastScrollEnabled="true"
         />
 
 </RelativeLayout>

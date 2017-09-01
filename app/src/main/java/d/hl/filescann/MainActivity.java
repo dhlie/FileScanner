@@ -9,6 +9,7 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.widget.BaseAdapter;
 import android.widget.Button;
+import android.widget.CheckBox;
 import android.widget.EditText;
 import android.widget.ListView;
 import android.widget.TextView;
@@ -20,19 +21,18 @@ import java.util.List;
 
 public class MainActivity extends Activity implements View.OnClickListener {
 
-    private Button btnStart, btnStop, btnSet;
-    private TextView tvINfo;
-    private ListView lvList;
-    private EditText etThread, etDepth;
+    private TextView mTVINfo;
+    private EditText mETThread, mETDepth;
+    private CheckBox mCBDetail;
 
     private MyAdapter mAdapter = new MyAdapter();
-    private FileScanner fileScanner;
-    private String[] suf;
-    private List<FindItem> files = new ArrayList<>(100);
-    private long startTime;
-    private int thread = 1, depth = -1;
-    private boolean detail = true;
-    private String path[];
+    private FileScanner mFileScanner;
+    private String[] mSuffixes;
+    private List<FindItem> mFiles;
+    private long mStartTime;
+    private int mThreadCount, mScanDepth;
+    private boolean mNeedDetail;
+    private String mScanPath[];
 
     private FileScanner.ScanCallback callback = new FileScanner.ScanCallback() {
         @Override
@@ -40,44 +40,45 @@ public class MainActivity extends Activity implements View.OnClickListener {
             runOnUiThread(new Runnable() {
                 @Override
                 public void run() {
-                    tvINfo.setText("文件数:0 thd:"+thread+"  dp:"+depth);
+                    mTVINfo.setText("total:0 thd:"+ mThreadCount +"  dp:"+ mScanDepth);
                     mAdapter.changeData(null);
                 }
             });
-            startTime = System.currentTimeMillis();
-            files = new ArrayList<>(100);
+            mStartTime = System.currentTimeMillis();
+            mFiles = new ArrayList<>(100);
         }
 
         @Override
         public void onFind(String path, long size, long modify) {
-            if (detail && path.endsWith(".txt") && size < 10240) return;
             FindItem item = new FindItem();
             item.path = path;
             item.size = size;
             item.modifyTime = modify;
-            files.add(item);
+            mFiles.add(item);
         }
 
         @Override
         public void onCancel() {
+            final long time = System.currentTimeMillis() - mStartTime;
+            Log.i("Scanner", "Scanner java callback:  onCancel  time:"+time);
             runOnUiThread(new Runnable() {
                 @Override
                 public void run() {
-                    tvINfo.setText(""+files.size());
-                    mAdapter.changeData(files);
+                    mTVINfo.setText("total:"+mFiles.size() + " time:"+time+" thd:"+ mThreadCount +"  dp:"+ mScanDepth);
+                    mAdapter.changeData(mFiles);
                 }
             });
         }
 
         @Override
         public void onFinish() {
-            final long time = System.currentTimeMillis() - startTime;
+            final long time = System.currentTimeMillis() - mStartTime;
             Log.i("Scanner", "Scanner java callback:  onFinish  time:"+time);
             runOnUiThread(new Runnable() {
                 @Override
                 public void run() {
-                    tvINfo.setText("文件数:"+files.size() + " 用时:"+time+" thd:"+thread+"  dp:"+depth);
-                    mAdapter.changeData(files);
+                    mTVINfo.setText("total:"+mFiles.size() + " time:"+time+" thd:"+ mThreadCount +"  dp:"+ mScanDepth);
+                    mAdapter.changeData(mFiles);
                 }
             });
         }
@@ -88,56 +89,61 @@ public class MainActivity extends Activity implements View.OnClickListener {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
-        btnStart = (Button) findViewById(R.id.tv_start);
-        btnStop = (Button) findViewById(R.id.tv_stop);
-        tvINfo = (TextView) findViewById(R.id.tv_info);
-        lvList = (ListView) findViewById(R.id.lv);
-        btnSet = (Button) findViewById(R.id.tv_reset);
-        etThread = (EditText) findViewById(R.id.et_thd);
-        etDepth = (EditText) findViewById(R.id.et_depth);
+        Button btnStart = (Button) findViewById(R.id.tv_start);
+        Button btnStop = (Button) findViewById(R.id.tv_stop);
+        mTVINfo = (TextView) findViewById(R.id.tv_info);
+        ListView lvList = (ListView) findViewById(R.id.lv);
+        Button btnSet = (Button) findViewById(R.id.tv_reset);
+        mETThread = (EditText) findViewById(R.id.et_thd);
+        mETDepth = (EditText) findViewById(R.id.et_depth);
+        mCBDetail = (CheckBox) findViewById(R.id.cb_detail);
 
         btnStart.setOnClickListener(this);
         btnStop.setOnClickListener(this);
         btnSet.setOnClickListener(this);
         lvList.setAdapter(mAdapter);
 
-        thread = 1;
-        depth = -1;//全盘扫描
-        detail = true;//是否获取文件详情
-        fileScanner = new FileScanner();
-        suf = new String[]{};//查找所有文件
-        //suf = new String[]{"mp3", "mp4", "avi", "rmvb"};
-        //suf = new String[]{"jpg", "jpeg", "png", "bmp", "gif"};
-        //suf = new String[]{"EBK2","EBK3","TXT","EPUB","CHM","UMD","PDF", "OPUB", "DOC", "DOCX",
+        mThreadCount = 1;
+        mScanDepth = -1;//全盘扫描
+        mNeedDetail = false;//是否获取文件详情
+        mFileScanner = new FileScanner();
+        mSuffixes = new String[]{};//查找所有文件
+        //mSuffixes = new String[]{"mp3", "mp4", "avi", "rmvb"};
+        //mSuffixes = new String[]{"jpg", "jpeg", "png", "bmp", "gif"};
+        //mSuffixes = new String[]{"EBK2","EBK3","TXT","EPUB","CHM","UMD","PDF", "OPUB", "DOC", "DOCX",
         //        "WPS", "XLS", "XLSX", "ET", "PPT", "PPTX", "DPS"};
-        //suf = new String[]{"jpg", "jpeg", "png", "bmp", "gif", "mp3", "mp4", "avi", "rmvb", "EBK2","EBK3","TXT","EPUB","CHM","UMD","PDF", "OPUB", "DOC", "DOCX",
+        //mSuffixes = new String[]{"jpg", "jpeg", "png", "bmp", "gif", "mp3", "mp4", "avi", "rmvb", "EBK2","EBK3","TXT","EPUB","CHM","UMD","PDF", "OPUB", "DOC", "DOCX",
         //                "WPS", "XLS", "XLSX", "ET", "PPT", "PPTX", "DPS"};
-        fileScanner.initScanner(suf, thread, depth, detail);
-        fileScanner.setScanCallback(callback);
+        mFileScanner.initScanner(mSuffixes, mThreadCount, mScanDepth, mNeedDetail);
+        mFileScanner.setScanCallback(callback);
         String sdPath = Environment.getExternalStorageDirectory().getAbsolutePath();
         //path = new String[] {sdPath+"/Android", sdPath+"DCIM"};
-        path = new String[] {sdPath};
-        fileScanner.startScan(path);
+        mScanPath = new String[] {sdPath};
+        mFileScanner.startScan(mScanPath);
 
-        etDepth.setText(""+depth);
-        etThread.setText(""+thread);
+        mETDepth.setText(""+ mScanDepth);
+        mETThread.setText(""+ mThreadCount);
+        mCBDetail.setChecked(mNeedDetail);
     }
 
     @Override
     public void onClick(View view) {
         switch (view.getId()) {
             case R.id.tv_start:
-                fileScanner.startScan(path);
+                mFileScanner.startScan(mScanPath);
                 break;
             case R.id.tv_stop:
-                if (fileScanner != null) fileScanner.stopScan();
+                if (mFileScanner != null) mFileScanner.stopScan();
                 break;
             case R.id.tv_reset:
-                String thd = etThread.getText().toString();
-                thread = Integer.parseInt(TextUtils.isEmpty(thd) ? "1" : thd);
-                String deep = etDepth.getText().toString();
-                depth = Integer.parseInt(TextUtils.isEmpty(deep) ? "-1" : deep);
-                fileScanner.initScanner(suf, thread, depth, detail);
+                String thd = mETThread.getText().toString();
+                mThreadCount = Integer.parseInt(TextUtils.isEmpty(thd) ? "1" : thd);
+                String deep = mETDepth.getText().toString();
+                mScanDepth = Integer.parseInt(TextUtils.isEmpty(deep) ? "-1" : deep);
+                mNeedDetail = mCBDetail.isChecked();
+                mFileScanner.initScanner(mSuffixes, mThreadCount, mScanDepth, mNeedDetail);
+                mETDepth.setText(""+ mScanDepth);
+                mETThread.setText(""+ mThreadCount);
                 break;
         }
     }
@@ -145,7 +151,7 @@ public class MainActivity extends Activity implements View.OnClickListener {
     @Override
     protected void onDestroy() {
         super.onDestroy();
-        fileScanner.recycle();
+        mFileScanner.recycle();
     }
 
     private static class FindItem {
@@ -181,7 +187,11 @@ public class MainActivity extends Activity implements View.OnClickListener {
             }
             FindItem item = mData.get(i);
             mDate.setTime(item.modifyTime*1000);
-            tv.setText(item.path.substring(item.path.lastIndexOf('/')+1) + "   "+mFormat.format(mDate) + "   size:"+item.size/1024+"KB");
+            if (mNeedDetail) {
+                tv.setText(item.path.substring(item.path.lastIndexOf('/')+1) + "   "+mFormat.format(mDate) + "   size:"+item.size/1024+"KB");
+            } else {
+                tv.setText(item.path.substring(item.path.lastIndexOf('/')+1));
+            }
             return tv;
         }
 
@@ -194,7 +204,5 @@ public class MainActivity extends Activity implements View.OnClickListener {
         public long getItemId(int i) {
             return 0;
         }
-
-
     }
 }
