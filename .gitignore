@@ -5,5 +5,5 @@
 /build
 /captures
 .externalNativeBuild
-/.idea/
+/.idea/*
 !.idea/codeStyleSettings.xml
