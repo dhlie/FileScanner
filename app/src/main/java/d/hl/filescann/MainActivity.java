@@ -40,7 +40,7 @@ public class MainActivity extends Activity implements View.OnClickListener {
             runOnUiThread(new Runnable() {
                 @Override
                 public void run() {
-                    mTVINfo.setText("total:0 thd:"+ mThreadCount +"  dp:"+ mScanDepth);
+                    mTVINfo.setText("扫描中...   total:0 thd:"+ mThreadCount +"  dp:"+ mScanDepth);
                     mAdapter.changeData(null);
                 }
             });

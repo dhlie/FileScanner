@@ -252,10 +252,15 @@ JNIEXPORT void JNICALL Java_d_hl_filescann_FileScanner_nativeStartScan
 
 JNIEXPORT void JNICALL Java_d_hl_filescann_FileScanner_nativeStopScan
   (JNIEnv *env, jobject jobj) {
-    cancelScan();
+    if (isScaning) {
+        cancelScan();
+    }
 }
 
 JNIEXPORT void JNICALL Java_d_hl_filescann_FileScanner_nativeRrecycle
   (JNIEnv *env, jobject jobj) {
+    if (isScaning) {
+        cancelScan();
+    }
     recycleScanner(env);
 }

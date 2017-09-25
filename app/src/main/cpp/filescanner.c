@@ -25,6 +25,7 @@ static struct stat fStat;
 
 static int finishThd;           //扫描完成的线程个数
 static int isCancel = 0;        //是否取消扫描
+static int isStart = 0;
 
 //---need free---
 static pthread_mutex_t mutex;   //线程锁
@@ -123,7 +124,7 @@ int startScan(int count, const char **path) {
 
     //重置变量
     pthread_mutex_lock(&mutex);
-    isCancel = finishThd = 0;
+    isCancel = finishThd = isStart = 0;
 #if DEBUG
     findCount = mallocCount = freeCount = openDirCount = closeDirCount = 0;
 #endif
@@ -210,10 +211,7 @@ int startScan(int count, const char **path) {
             LOG("%s-%d:create thread fail\n", "filescanner.c", __LINE__);
             continue;
         } else {
-            if (!j) {
-                j = 1;
-                onScannerStart();
-            }
+            j++;
         }
     }
 
@@ -233,6 +231,17 @@ int startScan(int count, const char **path) {
 //thread run
 void *scandirs(void * node) {
     if (attachCallback) attachCallback();
+
+    if (threadCount == 1) {
+        onScannerStart();
+    } else {
+        pthread_mutex_lock(&mutex);
+        if (!isStart) {
+            isStart = 1;
+            onScannerStart();
+        }
+        pthread_mutex_unlock(&mutex);
+    }
 
 //#if DEBUG
 //    pthread_mutex_lock(&mutex);
