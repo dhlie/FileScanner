@@ -34,7 +34,7 @@ static Node **dirGroup;         //文件分组,不同线程各扫描一组目录
 
 //回掉函数
 void (*onScannerStart)(void) = NULL;
-void (*onScannerFind)(long threadId, const char *file, off_t size, time_t modify) = NULL;
+void (*onScannerFind)(pthread_t threadId, const char *file, off_t size, time_t modify) = NULL;
 void (*onScannerFinish)(int isCancel) = NULL;
 void (*attachCallback)(void) = NULL;
 void (*detachCallback)(void) = NULL;
@@ -56,7 +56,7 @@ int initScanner(int sufCount, const char **suf, int thdCount, int depth, int det
     return 0;
 }
 
-void setCallbacks(void (*start)(void), void (*find)(long threadId, const char *file, off_t size, time_t modify), void (*finish)(int isCancel)) {
+void setCallbacks(void (*start)(void), void (*find)(pthread_t threadId, const char *file, off_t size, time_t modify), void (*finish)(int isCancel)) {
     onScannerStart = start;
     onScannerFind = find;
     onScannerFinish = finish;

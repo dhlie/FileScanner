@@ -34,7 +34,7 @@ int initScanner(int sufCount, const char **suf, int thdCount, int depth, int det
 /**
  * 设置回调函数
  * */
-void setCallbacks(void (*start)(void), void (*find)(long threadId, const char *file, off_t size, time_t modify), void (*finish)(int isCancel));
+void setCallbacks(void (*start)(void), void (*find)(pthread_t threadId, const char *file, off_t size, time_t modify), void (*finish)(int isCancel));
 
 /**
  * 开始扫描

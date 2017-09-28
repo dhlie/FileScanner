@@ -29,8 +29,6 @@ time_t      startTime;
 //-----------------JNIEnv-----------------
 // void        (*CallVoidMethod)(JNIEnv*, jobject, jmethodID, ...);
 // jstring     (*NewStringUTF)(JNIEnv*, const char*);
-// void        (*CallVoidMethod)(JNIEnv*, jobject, jmethodID, ...);
-// void        (*CallVoidMethod)(JNIEnv*, jobject, jmethodID, ...);
 // jsize       (*GetStringUTFLength)(JNIEnv*, jstring);
 // const char* (*GetStringUTFChars)(JNIEnv*, jstring, jboolean*);
 // void        (*ReleaseStringUTFChars)(JNIEnv*, jstring, const char*);
@@ -66,12 +64,12 @@ void onStart() {
     }
 }
 
-void onFind(long threadId, const char *file, off_t size, time_t modify) {
+void onFind(pthread_t threadId, const char *file, off_t size, time_t modify) {
     if (glCallbackObj && onFindId) {
         JNIEnv* env;
         (*glJvm)->GetEnv(glJvm, (void**)&env, jniVer);
         jstring jstr = (*env)->NewStringUTF(env, file);
-        (*env)->CallVoidMethod(env, glCallbackObj, onFindId, threadId, jstr, size, modify);
+        (*env)->CallVoidMethod(env, glCallbackObj, onFindId, (jlong) threadId, jstr, (jlong) size, (jlong) modify);
         (*env)->DeleteLocalRef(env, jstr);
     }
 }
@@ -133,6 +131,7 @@ void recycleScanner(JNIEnv *env) {
 
 JNIEXPORT void JNICALL Java_d_hl_filescann_FileScanner_nativeInitScanner
   (JNIEnv *env, jobject obj, jobjectArray sufArr, jint thdCount, jint depth, jboolean detail) {
+    if (isScaning) return;
     if (suffixs) {
         int i;
         for (i = 0; i < suffixCount; i++) {
@@ -168,6 +167,7 @@ JNIEXPORT void JNICALL Java_d_hl_filescann_FileScanner_nativeInitScanner
 
 JNIEXPORT void JNICALL Java_d_hl_filescann_FileScanner_nativeSetCallback
   (JNIEnv * env, jobject jobj, jobject jcallback) {
+    if (isScaning) return;
     glCallbackObj = (*env)->NewGlobalRef(env, jcallback);
     jclass jclazz = (*env)->GetObjectClass(env, jcallback);
     onStartId = (*env)->GetMethodID(env, jclazz, "onStart", "()V");
@@ -239,6 +239,8 @@ JNIEXPORT void JNICALL Java_d_hl_filescann_FileScanner_nativeStartScan
         if (startScan(size, pathes)) {
             isScaning = 0;
         }
+    } else {
+        isScaning = 0;
     }
 }
 
