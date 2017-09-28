@@ -11,9 +11,9 @@
 #endif
 
 typedef struct node {
-    struct node *next;
     char *name;
     int type;//文件类型:DT_DIR-目录  DT_REG-普通文件
+    struct node *next;
 }Node;
 
 static int threadCount = 1;     //扫描线程数
@@ -34,9 +34,8 @@ static Node **dirGroup;         //文件分组,不同线程各扫描一组目录
 
 //回掉函数
 void (*onScannerStart)(void) = NULL;
-void (*onScannerFind)(const char *file, off_t size, time_t modify) = NULL;
-void (*onScannerCancel)(void) = NULL;
-void (*onScannerFinish)(void) = NULL;
+void (*onScannerFind)(long threadId, const char *file, off_t size, time_t modify) = NULL;
+void (*onScannerFinish)(int isCancel) = NULL;
 void (*attachCallback)(void) = NULL;
 void (*detachCallback)(void) = NULL;
 
@@ -57,10 +56,9 @@ int initScanner(int sufCount, const char **suf, int thdCount, int depth, int det
     return 0;
 }
 
-void setCallbacks(void (*start)(void), void (*find)(const char *file, off_t size, time_t modify), void (*cancel)(void), void (*finish)(void)) {
+void setCallbacks(void (*start)(void), void (*find)(long threadId, const char *file, off_t size, time_t modify), void (*finish)(int isCancel)) {
     onScannerStart = start;
     onScannerFind = find;
-    onScannerCancel = cancel;
     onScannerFinish = finish;
 }
 
@@ -110,10 +108,10 @@ void setThreadAttachCallback(void (*attach)(void), void (*detach)(void)) {
 /**
  * 扫描路径
  * @param count : 路径个数
- * @param path : 路径结尾不能带'/'
+ * @param path : 路径数组
  * @param int : 0-开始扫描 -1未开始扫描
  */
-int startScan(int count, const char **path) {
+int startScan(int count, char **path) {
     if (!path) return -1;
 
     if (pthread_mutex_init(&mutex, NULL)) {
@@ -198,7 +196,6 @@ int startScan(int count, const char **path) {
             freeNodes(dirGroup[i]);
         }
         myFree(dirGroup);
-//        onScannerCancel();
         pthread_mutex_destroy(&mutex);
         return -1;
     }
@@ -283,6 +280,13 @@ void *scandirs(void * node) {
 }
 
 static void scanDir(const char *path, int depth) {
+    pthread_mutex_lock(&mutex);
+    if (isCancel) {
+        pthread_mutex_unlock(&mutex);
+        return;
+    }
+    pthread_mutex_unlock(&mutex);
+
     DIR *dir = opendir(path);
     if (!dir) {
 
@@ -303,13 +307,6 @@ static void scanDir(const char *path, int depth) {
 
     struct dirent *subfile = readdir(dir);
     while (subfile) {
-        pthread_mutex_lock(&mutex);
-        if (isCancel) {
-            pthread_mutex_unlock(&mutex);
-            break;
-        }
-        pthread_mutex_unlock(&mutex);
-
         if (strcmp(subfile->d_name, ".") == 0 || strcmp(subfile->d_name, "..") == 0) {
             subfile = readdir(dir);
             continue;
@@ -339,20 +336,10 @@ static void scanDir(const char *path, int depth) {
 static void checkFileSuffix(const char *fileName) {
     if (fileName == NULL) return;
     if (!suffixCount) {
-        if (threadCount == 1) {
-            if (fDetail && stat(fileName, &fStat) == 0) {
-                onScannerFind(fileName, fStat.st_size, fStat.st_mtim.tv_sec);
-            } else {
-                onScannerFind(fileName, 0, 0);
-            }
+        if (fDetail && stat(fileName, &fStat) == 0) {
+            onScannerFind(pthread_self(), fileName, fStat.st_size, fStat.st_mtim.tv_sec);
         } else {
-            pthread_mutex_lock(&mutex);
-            if (fDetail && stat(fileName, &fStat) == 0) {
-                onScannerFind(fileName, fStat.st_size, fStat.st_mtim.tv_sec);
-            } else {
-                onScannerFind(fileName, 0, 0);
-            }
-            pthread_mutex_unlock(&mutex);
+            onScannerFind(pthread_self(), fileName, 0, 0);
         }
 
 #if DEBUG
@@ -369,22 +356,11 @@ static void checkFileSuffix(const char *fileName) {
     int i;
     for (i = 0; i < suffixCount; i++) {
         if (strcasecmp(suffix+1, *(fileSuffix+i)) == 0) {
-            if (threadCount == 1) {
-                if (fDetail && stat(fileName, &fStat) == 0) {
-                    onScannerFind(fileName, fStat.st_size, fStat.st_mtim.tv_sec);
-                } else {
-                    onScannerFind(fileName, 0, 0);
-                }
+            if (fDetail && stat(fileName, &fStat) == 0) {
+                onScannerFind(pthread_self(), fileName, fStat.st_size, fStat.st_mtim.tv_sec);
             } else {
-                pthread_mutex_lock(&mutex);
-                if (fDetail && stat(fileName, &fStat) == 0) {
-                    onScannerFind(fileName, fStat.st_size, fStat.st_mtim.tv_sec);
-                } else {
-                    onScannerFind(fileName, 0, 0);
-                }
-                pthread_mutex_unlock(&mutex);
+                onScannerFind(pthread_self(), fileName, 0, 0);
             }
-
 
 #if DEBUG
             pthread_mutex_lock(&mutex);
@@ -402,11 +378,7 @@ static void thdScanFinish() {
     if (finishThd == threadCount) {
         pthread_mutex_unlock(&mutex);
         myFree(dirGroup);
-        if (isCancel) {
-            onScannerCancel();
-        } else {
-            onScannerFinish();
-        }
+        onScannerFinish(isCancel);
 
 #if DEBUG
         LOG("%s-%d: scan finished   destroy mutex, file total:%d\n", "filescanner.c", __LINE__, findCount);

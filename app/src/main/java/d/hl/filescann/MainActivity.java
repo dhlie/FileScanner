@@ -15,7 +15,6 @@ import android.widget.ListView;
 import android.widget.TextView;
 
 import java.text.SimpleDateFormat;
-import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
 
@@ -28,57 +27,33 @@ public class MainActivity extends Activity implements View.OnClickListener {
     private MyAdapter mAdapter = new MyAdapter();
     private FileScanner mFileScanner;
     private String[] mSuffixes;
-    private List<FindItem> mFiles;
     private long mStartTime;
     private int mThreadCount, mScanDepth;
     private boolean mNeedDetail;
     private String mScanPath[];
 
-    private FileScanner.ScanCallback callback = new FileScanner.ScanCallback() {
+    private FileScanner.ScanCallback callback = new AbstractScanCallback() {
         @Override
-        public void onStart() {
+        public void onScanStart() {
+            mStartTime = System.currentTimeMillis();
             runOnUiThread(new Runnable() {
                 @Override
                 public void run() {
-                    mTVINfo.setText("扫描中...   total:0 thd:"+ mThreadCount +"  dp:"+ mScanDepth);
+                    mTVINfo.setText("扫描中...  total:0 time:0 thd:"+ mThreadCount +"  dp:"+ mScanDepth);
                     mAdapter.changeData(null);
                 }
             });
-            mStartTime = System.currentTimeMillis();
-            mFiles = new ArrayList<>(100);
         }
 
         @Override
-        public void onFind(String path, long size, long modify) {
-            FindItem item = new FindItem();
-            item.path = path;
-            item.size = size;
-            item.modifyTime = modify;
-            mFiles.add(item);
-        }
-
-        @Override
-        public void onCancel() {
+        public void onScanFinish(final List<FileScanner.FindItem> files, final boolean isCancel) {
             final long time = System.currentTimeMillis() - mStartTime;
-            Log.i("Scanner", "Scanner java callback:  onCancel  time:"+time);
+            Log.i("Scanner", "Scanner java callback:  onFinish  time:"+time + "  count:"+files.size());
             runOnUiThread(new Runnable() {
                 @Override
                 public void run() {
-                    mTVINfo.setText("total:"+mFiles.size() + " time:"+time+" thd:"+ mThreadCount +"  dp:"+ mScanDepth);
-                    mAdapter.changeData(mFiles);
-                }
-            });
-        }
-
-        @Override
-        public void onFinish() {
-            final long time = System.currentTimeMillis() - mStartTime;
-            Log.i("Scanner", "Scanner java callback:  onFinish  time:"+time);
-            runOnUiThread(new Runnable() {
-                @Override
-                public void run() {
-                    mTVINfo.setText("total:"+mFiles.size() + " time:"+time+" thd:"+ mThreadCount +"  dp:"+ mScanDepth);
-                    mAdapter.changeData(mFiles);
+                    mTVINfo.setText("total:"+files.size() + " time:"+time+" thd:"+ mThreadCount +"  dp:"+ mScanDepth);
+                    mAdapter.changeData(files);
                 }
             });
         }
@@ -112,13 +87,13 @@ public class MainActivity extends Activity implements View.OnClickListener {
         //mSuffixes = new String[]{"jpg", "jpeg", "png", "bmp", "gif"};
         //mSuffixes = new String[]{"EBK2","EBK3","TXT","EPUB","CHM","UMD","PDF", "OPUB", "DOC", "DOCX",
         //        "WPS", "XLS", "XLSX", "ET", "PPT", "PPTX", "DPS"};
-        //mSuffixes = new String[]{"jpg", "jpeg", "png", "bmp", "gif", "mp3", "mp4", "avi", "rmvb", "EBK2","EBK3","TXT","EPUB","CHM","UMD","PDF", "OPUB", "DOC", "DOCX",
-        //                "WPS", "XLS", "XLSX", "ET", "PPT", "PPTX", "DPS"};
+        //mSuffixes = new String[]{"jpg", "jpeg", "png", "bmp", "gif", "mp3", "mp4", "avi", "rmvb", "wmv", "wma", "flav", "wav", "ogg", "mp2", "m4a", "au", "aac", "3gp", "3g2", "asf", "flv", "mov", "rm", "swf", "mpg", "EBK2","EBK3","TXT","EPUB","CHM","UMD","PDF", "OPUB", "DOC", "DOCX",
+        //        "WPS", "XLS", "XLSX", "ET", "PPT", "PPTX", "DPS"};
         mFileScanner.initScanner(mSuffixes, mThreadCount, mScanDepth, mNeedDetail);
         mFileScanner.setScanCallback(callback);
         String sdPath = Environment.getExternalStorageDirectory().getAbsolutePath();
-        //path = new String[] {sdPath+"/Android", sdPath+"DCIM"};
         mScanPath = new String[] {sdPath};
+        //mScanPath = new String[] {sdPath+"/Android/", sdPath+"/DCIM/"};
         mFileScanner.startScan(mScanPath);
 
         mETDepth.setText(""+ mScanDepth);
@@ -154,19 +129,13 @@ public class MainActivity extends Activity implements View.OnClickListener {
         mFileScanner.recycle();
     }
 
-    private static class FindItem {
-        String path;
-        long size;
-        long modifyTime;
-    }
-
     private class MyAdapter extends BaseAdapter {
 
-        private List<FindItem> mData;
+        private List<FileScanner.FindItem> mData;
         private SimpleDateFormat mFormat = new SimpleDateFormat("yyyy-MM-dd HH:mm");
         private Date mDate = new Date();
 
-        public void changeData(List<FindItem> items) {
+        public void changeData(List<FileScanner.FindItem> items) {
             mData = items;
             notifyDataSetChanged();
         }
@@ -185,7 +154,7 @@ public class MainActivity extends Activity implements View.OnClickListener {
             } else {
                 tv = (TextView) view;
             }
-            FindItem item = mData.get(i);
+            FileScanner.FindItem item = mData.get(i);
             mDate.setTime(item.modifyTime*1000);
             if (mNeedDetail) {
                 tv.setText(item.path.substring(item.path.lastIndexOf('/')+1) + "   "+mFormat.format(mDate) + "   size:"+item.size/1024+"KB");

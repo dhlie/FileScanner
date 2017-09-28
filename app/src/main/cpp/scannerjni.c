@@ -8,7 +8,7 @@
 char*       path = NULL;
 char**      suffixs = NULL;
 char**      pathes = NULL;
-jmethodID   onStartId, onFindId, onFinishId, onCancelId;
+jmethodID   onStartId, onFindId, onFinishId;
 JavaVM*     glJvm;
 jobject     glCallbackObj = NULL;
 jint        jniVer;
@@ -66,28 +66,17 @@ void onStart() {
     }
 }
 
-void onFind(const char *file, off_t size, time_t modify) {
+void onFind(long threadId, const char *file, off_t size, time_t modify) {
     if (glCallbackObj && onFindId) {
         JNIEnv* env;
         (*glJvm)->GetEnv(glJvm, (void**)&env, jniVer);
         jstring jstr = (*env)->NewStringUTF(env, file);
-        (*env)->CallVoidMethod(env, glCallbackObj, onFindId, jstr, size, modify);
+        (*env)->CallVoidMethod(env, glCallbackObj, onFindId, threadId, jstr, size, modify);
         (*env)->DeleteLocalRef(env, jstr);
     }
 }
 
-void onCancel() {
-    LOG("native callback-----scan cancel\n");
-
-    if (glCallbackObj && onCancelId) {
-        JNIEnv* env;
-        (*glJvm)->GetEnv(glJvm, (void**)&env, jniVer);
-        (*env)->CallVoidMethod(env, glCallbackObj, onCancelId);
-    }
-    isScaning = 0;
-}
-
-void onFinish() {
+void onFinish(int isCancel) {
 
 #if DEBUG
     LOG("native callback-----scan finish   time:%ld\n", time(NULL)-startTime);
@@ -97,7 +86,7 @@ void onFinish() {
     if (glCallbackObj && onFinishId) {
         JNIEnv* env;
         (*glJvm)->GetEnv(glJvm, (void**)&env, jniVer);
-        (*env)->CallVoidMethod(env, glCallbackObj, onFinishId);
+        (*env)->CallVoidMethod(env, glCallbackObj, onFinishId, (jboolean) isCancel);
     }
     isScaning = 0;
 }
@@ -172,7 +161,7 @@ JNIEXPORT void JNICALL Java_d_hl_filescann_FileScanner_nativeInitScanner
     }
 
     initScanner(size, suffixs, thdCount, depth, detail);
-    setCallbacks(onStart, onFind, onCancel, onFinish);
+    setCallbacks(onStart, onFind, onFinish);
     setThreadAttachCallback(onAttachThread, onDetachThread);
     LOG("native scanner:init success\n");
 }
@@ -188,21 +177,14 @@ JNIEXPORT void JNICALL Java_d_hl_filescann_FileScanner_nativeSetCallback
         return;
     }
 
-    onFindId = (*env)->GetMethodID(env, jclazz, "onFind", "(Ljava/lang/String;JJ)V");
+    onFindId = (*env)->GetMethodID(env, jclazz, "onFind", "(JLjava/lang/String;JJ)V");
     if (onFindId == NULL) {
         recycleScanner(env);
         LOG("native scanner:method onFind find fail\n");
         return;
     }
 
-    onCancelId = (*env)->GetMethodID(env, jclazz, "onCancel", "()V");
-    if (onCancelId == NULL) {
-        recycleScanner(env);
-        LOG("native scanner:method onCancel find fail\n");
-        return;
-    }
-
-    onFinishId = (*env)->GetMethodID(env, jclazz, "onFinish", "()V");
+    onFinishId = (*env)->GetMethodID(env, jclazz, "onFinish", "(Z)V");
     if (onFinishId == NULL) {
         recycleScanner(env);
         LOG("native scanner:method onFinish find fail\n");
@@ -240,7 +222,17 @@ JNIEXPORT void JNICALL Java_d_hl_filescann_FileScanner_nativeStartScan
         for (i = 0; i < size; i++) {
             jobject jstr = (*env)->GetObjectArrayElement(env, jarr, i);
             char* str = jStringToStr(env, (jstring)jstr);
-            *(pathes+i) = str;
+            //去掉路径结尾的'/'
+            if (str[strlen(str) - 1] == '/') {
+                size_t len = strlen(str);
+                char* str2 = (char*)malloc(len);
+                strncpy(str2, str, len);
+                str2[len - 1] = '\0';
+                *(pathes+i) = str2;
+                free(str);
+            } else {
+                *(pathes+i) = str;
+            }
             (*env)->DeleteLocalRef(env, jstr);
         }
         pathCount = size;

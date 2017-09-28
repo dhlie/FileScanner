@@ -34,14 +34,14 @@ int initScanner(int sufCount, const char **suf, int thdCount, int depth, int det
 /**
  * 设置回调函数
  * */
-void setCallbacks(void (*start)(void), void (*find)(const char *file, off_t size, time_t modify), void (*cancel)(void), void (*finish)(void));
+void setCallbacks(void (*start)(void), void (*find)(long threadId, const char *file, off_t size, time_t modify), void (*finish)(int isCancel));
 
 /**
  * 开始扫描
  *  path        - 扫描目录
  *  int         - 0:开始扫描 -1:未开始扫描
  * */
-int startScan(int count, const char **path);
+int startScan(int count, char **path);
 
 /**
  * 取消扫描

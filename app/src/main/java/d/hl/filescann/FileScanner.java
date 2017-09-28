@@ -12,9 +12,21 @@ public class FileScanner {
 
     interface ScanCallback {
         void onStart();
-        void onFind(String path, long size, long modify);
-        void onCancel();
-        void onFinish();
+        void onFind(long threadId, String path, long size, long modify);
+        void onFinish(boolean isCancel);
+    }
+
+    public static class FindItem {
+
+        public FindItem(String path, long size, long modifyTime) {
+            this.path = path;
+            this.size = size;
+            this.modifyTime = modifyTime;
+        }
+
+        String path;
+        long size;
+        long modifyTime;
     }
 
     /**
@@ -39,7 +51,7 @@ public class FileScanner {
 
     /**
      *  扫描路径
-     * @param path :路径结尾不能带'/'
+     * @param path :要扫描的路径数组
      */
     public void startScan(String path[]) {
         if (path != null && path.length > 0) {
