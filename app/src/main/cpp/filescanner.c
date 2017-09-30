@@ -12,7 +12,7 @@
 
 typedef struct node {
     char *name;
-    int type;//文件类型:DT_DIR-目录  DT_REG-普通文件
+    int depth;
     struct node *next;
 }Node;
 
@@ -30,6 +30,7 @@ static int isStart = 0;
 //---need free---
 static pthread_mutex_t mutex;   //线程锁
 static Node **dirGroup;         //文件分组,不同线程各扫描一组目录
+static Node *rootFiles = NULL;  //根目录中的文件
 //---need free---
 
 //回掉函数
@@ -95,15 +96,14 @@ static void freeNodes(Node *node) {
     }
 }
 
-void *scandirs(void * node);
-static void scanDir(const char *path, int depth);
-static void checkFileSuffix(const char *fileName);
-static void thdScanFinish(void);
-
 void setThreadAttachCallback(void (*attach)(void), void (*detach)(void)) {
     attachCallback = attach;
     detachCallback = detach;
 }
+
+static void *scanDir(void * node);
+static void checkFileSuffix(const char *dir, const char *fileName);
+static void thdScanFinish(Node* nodes);
 
 /**
  * 扫描路径
@@ -123,6 +123,7 @@ int startScan(int count, char **path) {
     //重置变量
     pthread_mutex_lock(&mutex);
     isCancel = finishThd = isStart = 0;
+    rootFiles = NULL;
 #if DEBUG
     findCount = mallocCount = freeCount = openDirCount = closeDirCount = 0;
 #endif
@@ -135,7 +136,7 @@ int startScan(int count, char **path) {
     }
     memset(dirGroup, 0, sizeof(Node *)*threadCount);
 
-    int fileIndex = 0;
+    int dirCount = 0;
     struct dirent *subfile;
     int i;
     for (i = 0; i < count; ++i) {
@@ -169,14 +170,18 @@ int startScan(int count, char **path) {
             strcat(filename, "/");
             strcat(filename, subfile->d_name);
             fileNode->name = filename;
-            fileNode->next = NULL;
-            fileNode->type = subfile->d_type;
 
-            if (fileIndex >= threadCount) {
-                fileNode->next = dirGroup[fileIndex%threadCount];
+            if (subfile->d_type == DT_DIR) {
+                int index = dirCount%threadCount;
+                fileNode->next = dirGroup[index];
+                fileNode->depth = 1;
+                dirGroup[index] = fileNode;
+                dirCount++;
+            } else if (subfile->d_type == DT_REG) {
+                fileNode->next = rootFiles;
+                rootFiles = fileNode;
             }
-            dirGroup[fileIndex%threadCount] = fileNode;
-            fileIndex++;
+
             subfile = readdir(dir);
         }
         closedir(dir);
@@ -189,13 +194,14 @@ int startScan(int count, char **path) {
     }
 
     pthread_mutex_lock(&mutex);
-    if (isCancel || fileIndex == 0) {
+    if (isCancel || (dirCount == 0 && rootFiles == NULL)) {
         pthread_mutex_unlock(&mutex);
         LOG("%s-%d:destroy mutex\n", "filescanner.c", __LINE__);
         for (i = 0; i < threadCount; i++) {
             freeNodes(dirGroup[i]);
         }
         myFree(dirGroup);
+        freeNodes(rootFiles);
         pthread_mutex_destroy(&mutex);
         return -1;
     }
@@ -204,8 +210,9 @@ int startScan(int count, char **path) {
     int j = 0;
     for (i = 0; i < threadCount; i++) {
         pthread_t pt;
-        if(pthread_create(&pt, NULL, scandirs, dirGroup[i])) {
+        if(pthread_create(&pt, NULL, scanDir, dirGroup[i])) {
             LOG("%s-%d:create thread fail\n", "filescanner.c", __LINE__);
+            freeNodes(dirGroup[i]);
             continue;
         } else {
             j++;
@@ -220,127 +227,166 @@ int startScan(int count, char **path) {
             freeNodes(dirGroup[i]);
         }
         myFree(dirGroup);
+        freeNodes(rootFiles);
         return -1;
     }
     return 0;
 }
 
 //thread run
-void *scandirs(void * node) {
+static void *scanDir(void * node) {
     if (attachCallback) attachCallback();
-
+    Node* recycled = NULL;
     if (threadCount == 1) {
         onScannerStart();
+
+        Node* files = rootFiles;
+        while (files) {
+            checkFileSuffix(NULL, files->name);
+            files = files->next;
+        }
+        recycled = rootFiles;
     } else {
+        Node* files = NULL;
         pthread_mutex_lock(&mutex);
         if (!isStart) {
             isStart = 1;
+            files = rootFiles;
             onScannerStart();
         }
         pthread_mutex_unlock(&mutex);
+
+        if (files) {
+            while (files) {
+                checkFileSuffix(NULL, files->name);
+                files = files->next;
+            }
+            recycled = rootFiles;
+        }
     }
 
-//#if DEBUG
-//    pthread_mutex_lock(&mutex);
-//    Node* nd = node;
-//    LOG("\nthread:%lu, scan dirs:>>>>>>>>>>>>>>>>>>>>>>>>>\n", pthread_self());
-//    while (nd) {
-//        LOG("%s\n", nd->name);
-//        nd = nd->next;
-//    }
-//    LOG("thread:%lu, scan dirs:<<<<<<<<<<<<<<<<<<<<<<<<<\n\n", pthread_self());
-//    fflush(stdout);
-//    pthread_mutex_unlock(&mutex);
-//#endif
+#if DEBUG
+    pthread_mutex_lock(&mutex);
+    Node* nd = node;
+    LOG("\nthread:%lu, scan dirs:>>>>>>>>>>>>>>>>>>>>>>>>>\n", pthread_self());
+    while (nd) {
+        LOG("%s\n", nd->name);
+        nd = nd->next;
+    }
+    LOG("thread:%lu, scan dirs:<<<<<<<<<<<<<<<<<<<<<<<<<\n\n", pthread_self());
+    fflush(stdout);
+    pthread_mutex_unlock(&mutex);
+#endif
 
     Node *fileNode = (Node *)node;
-    while(fileNode) {
-        pthread_mutex_lock(&mutex);
-        if (isCancel) {
+    if (fileNode && (scanDepth == -1 || fileNode->depth < scanDepth)) {
+        while(fileNode) {
+            pthread_mutex_lock(&mutex);
+            if (isCancel) {
+                pthread_mutex_unlock(&mutex);
+                freeNodes(fileNode);
+                break;
+            }
             pthread_mutex_unlock(&mutex);
-            freeNodes(fileNode);
-            break;
-        }
-        pthread_mutex_unlock(&mutex);
 
-        if (fileNode->type == DT_DIR) {
-            if (scanDepth >= 2 || scanDepth == -1) scanDir(fileNode->name, 2);
-        } else if (fileNode->type == DT_REG) {
-            checkFileSuffix(fileNode->name);
-        }
+            DIR *dir = opendir(fileNode->name);
+            if (!dir) {
 
-        Node *tmp = fileNode;
-        fileNode = fileNode->next;
-        myFree(tmp->name);
-        myFree(tmp);
+#if DEBUG
+                LOG("%s-%d:%s ", "filescanner.c", __LINE__, fileNode->name);
+                fflush(stdout);
+                perror("open fail");
+#endif
+
+                Node* next = fileNode->next;
+                fileNode->next = recycled;
+                recycled = fileNode;
+                fileNode = next;
+                continue;
+            }
+
+#if DEBUG
+            pthread_mutex_lock(&mutex);
+            openDirCount++;
+            pthread_mutex_unlock(&mutex);
+#endif
+
+            struct dirent *subfile = readdir(dir);
+            while (subfile) {
+                if (strcmp(subfile->d_name, ".") == 0 || strcmp(subfile->d_name, "..") == 0) {
+                    subfile = readdir(dir);
+                    continue;
+                }
+
+                if (subfile->d_type == DT_DIR) {
+                    if (scanDepth == -1 || (fileNode->depth + 1) < scanDepth) {
+                        Node* newDir = NULL;
+                        if (recycled) {
+                            newDir = recycled;
+                            recycled = recycled->next;
+                            myFree(newDir->name);
+                        } else {
+                            newDir = (Node*)myMalloc(sizeof(Node));
+                        }
+                        if (newDir) {
+                            char *fileName = (char *)myMalloc(strlen(fileNode->name)+strlen(subfile->d_name)+2);
+                            strcpy(fileName, fileNode->name);
+                            strcat(fileName, "/");
+                            strcat(fileName, subfile->d_name);
+
+                            newDir->depth = fileNode->depth + 1;
+                            newDir->name = fileName;
+                            newDir->next = fileNode->next;
+                            fileNode->next = newDir;
+                        }
+                    }
+                } else if (subfile->d_type == DT_REG) {
+                    checkFileSuffix(fileNode->name, subfile->d_name);
+                }
+
+                subfile = readdir(dir);
+            }
+            closedir(dir);
+
+#if DEBUG
+            pthread_mutex_lock(&mutex);
+            closeDirCount++;
+            pthread_mutex_unlock(&mutex);
+#endif
+
+
+            Node *tmp = fileNode;
+            fileNode = fileNode->next;
+            tmp->next = recycled;
+            recycled = tmp;
+        }
     }
 
-    thdScanFinish();
+    thdScanFinish(recycled);
     if (detachCallback) detachCallback();
 }
 
-static void scanDir(const char *path, int depth) {
-    pthread_mutex_lock(&mutex);
-    if (isCancel) {
-        pthread_mutex_unlock(&mutex);
-        return;
-    }
-    pthread_mutex_unlock(&mutex);
-
-    DIR *dir = opendir(path);
-    if (!dir) {
-
-#if DEBUG
-        LOG("%s-%d:%s ", "filescanner.c", __LINE__, path);
-        fflush(stdout);
-        perror("open fail");
-#endif
-
-        return;
-    }
-
-#if DEBUG
-    pthread_mutex_lock(&mutex);
-    openDirCount++;
-    pthread_mutex_unlock(&mutex);
-#endif
-
-    struct dirent *subfile = readdir(dir);
-    while (subfile) {
-        if (strcmp(subfile->d_name, ".") == 0 || strcmp(subfile->d_name, "..") == 0) {
-            subfile = readdir(dir);
-            continue;
-        }
-        char *fileName = (char *)myMalloc(strlen(path)+strlen(subfile->d_name)+2);
-        strcpy(fileName, path);
-        strcat(fileName, "/");
-        strcat(fileName, subfile->d_name);
-        if (subfile->d_type == DT_DIR) {
-            if (depth < scanDepth || scanDepth == -1) scanDir(fileName, depth + 1);
-        } else if (subfile->d_type == DT_REG) {
-            checkFileSuffix(fileName);
-        }
-        myFree(fileName);
-
-        subfile = readdir(dir);
-    }
-    closedir(dir);
-
-#if DEBUG
-    pthread_mutex_lock(&mutex);
-    closeDirCount++;
-    pthread_mutex_unlock(&mutex);
-#endif
-}
-
-static void checkFileSuffix(const char *fileName) {
+/**
+ * 检查文件类型
+ * @param dir       :目录名,
+ * @param fileName  :文件名,目录名为NULL时表示全路径
+ */
+static void checkFileSuffix(const char *dir, const char *fileName) {
     if (fileName == NULL) return;
     if (!suffixCount) {
-        if (fDetail && stat(fileName, &fStat) == 0) {
-            onScannerFind(pthread_self(), fileName, fStat.st_size, fStat.st_mtim.tv_sec);
-        } else {
-            onScannerFind(pthread_self(), fileName, 0, 0);
+        char *path = fileName;
+        if (dir) {
+            path = (char *)myMalloc(strlen(dir)+strlen(fileName)+2);
+            strcpy(path, dir);
+            strcat(path, "/");
+            strcat(path, fileName);
         }
+        if (fDetail && stat(path, &fStat) == 0) {
+            onScannerFind(pthread_self(), path, fStat.st_size, fStat.st_mtim.tv_sec);
+        } else {
+            onScannerFind(pthread_self(), path, 0, 0);
+        }
+        if (dir) myFree(path);
 
 #if DEBUG
         pthread_mutex_lock(&mutex);
@@ -356,11 +402,19 @@ static void checkFileSuffix(const char *fileName) {
     int i;
     for (i = 0; i < suffixCount; i++) {
         if (strcasecmp(suffix+1, *(fileSuffix+i)) == 0) {
-            if (fDetail && stat(fileName, &fStat) == 0) {
-                onScannerFind(pthread_self(), fileName, fStat.st_size, fStat.st_mtim.tv_sec);
-            } else {
-                onScannerFind(pthread_self(), fileName, 0, 0);
+            char *path = fileName;
+            if (dir) {
+                path = (char *)myMalloc(strlen(dir)+strlen(fileName)+2);
+                strcpy(path, dir);
+                strcat(path, "/");
+                strcat(path, fileName);
             }
+            if (fDetail && stat(path, &fStat) == 0) {
+                onScannerFind(pthread_self(), path, fStat.st_size, fStat.st_mtim.tv_sec);
+            } else {
+                onScannerFind(pthread_self(), path, 0, 0);
+            }
+            if (dir) myFree(path);
 
 #if DEBUG
             pthread_mutex_lock(&mutex);
@@ -372,20 +426,22 @@ static void checkFileSuffix(const char *fileName) {
     }
 }
 
-static void thdScanFinish() {
+static void thdScanFinish(Node* nodes) {
     pthread_mutex_lock(&mutex);
     finishThd++;
     if (finishThd == threadCount) {
         pthread_mutex_unlock(&mutex);
-        myFree(dirGroup);
         onScannerFinish(isCancel);
+        myFree(dirGroup);
+        freeNodes(nodes);
 
 #if DEBUG
-        LOG("%s-%d: scan finished   destroy mutex, file total:%d\n", "filescanner.c", __LINE__, findCount);
+        LOG("%s-%d: scan finished---destroy mutex, file total:%d\n", "filescanner.c", __LINE__, findCount);
         LOG("%s-%d:malloc-free count:%d - %d,  open-close count:%d - %d\n", "filescanner.c", __LINE__, mallocCount, freeCount, openDirCount, closeDirCount);
 #endif
         pthread_mutex_destroy(&mutex);
         return;
     }
     pthread_mutex_unlock(&mutex);
+    freeNodes(nodes);
 }

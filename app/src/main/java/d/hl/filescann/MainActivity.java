@@ -78,7 +78,9 @@ public class MainActivity extends Activity implements View.OnClickListener {
         btnSet.setOnClickListener(this);
         lvList.setAdapter(mAdapter);
 
-        mThreadCount = 1;
+        int precessorNum = Runtime.getRuntime().availableProcessors();
+        precessorNum = precessorNum > 4 ? 4 : precessorNum;
+        mThreadCount = precessorNum;
         mScanDepth = -1;//全盘扫描
         mNeedDetail = false;//是否获取文件详情
         mFileScanner = new FileScanner();
@@ -87,8 +89,8 @@ public class MainActivity extends Activity implements View.OnClickListener {
         //mSuffixes = new String[]{"jpg", "jpeg", "png", "bmp", "gif"};
         //mSuffixes = new String[]{"EBK2","EBK3","TXT","EPUB","CHM","UMD","PDF", "OPUB", "DOC", "DOCX",
         //        "WPS", "XLS", "XLSX", "ET", "PPT", "PPTX", "DPS"};
-        //mSuffixes = new String[]{"jpg", "jpeg", "png", "bmp", "gif", "mp3", "mp4", "avi", "rmvb", "wmv", "wma", "flav", "wav", "ogg", "mp2", "m4a", "au", "aac", "3gp", "3g2", "asf", "flv", "mov", "rm", "swf", "mpg", "EBK2","EBK3","TXT","EPUB","CHM","UMD","PDF", "OPUB", "DOC", "DOCX",
-        //        "WPS", "XLS", "XLSX", "ET", "PPT", "PPTX", "DPS"};
+        mSuffixes = new String[]{"jpg", "jpeg", "png", "bmp", "gif", "mp3", "mp4", "avi", "rmvb", "wmv", "wma", "flav", "wav", "ogg", "mp2", "m4a", "au", "aac", "3gp", "3g2", "asf", "flv", "mov", "rm", "swf", "mpg", "EBK2","EBK3","TXT","EPUB","CHM","UMD","PDF", "OPUB", "DOC", "DOCX",
+                "WPS", "XLS", "XLSX", "ET", "PPT", "PPTX", "DPS"};
         mFileScanner.initScanner(mSuffixes, mThreadCount, mScanDepth, mNeedDetail);
         mFileScanner.setScanCallback(callback);
         String sdPath = Environment.getExternalStorageDirectory().getAbsolutePath();
