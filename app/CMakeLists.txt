@@ -17,7 +17,7 @@ add_library( # Sets the name of the library.
              SHARED
 
              # Provides a relative path to your source file(s).
-             src/main/cpp/scannerjni.c src/main/cpp/filescanner.c )
+             src/main/cpp/jni_init.c src/main/cpp/filescanner.c )
 
 # Searches for a specified prebuilt library and stores the path as a
 # variable. Because CMake includes system libraries in the search path by

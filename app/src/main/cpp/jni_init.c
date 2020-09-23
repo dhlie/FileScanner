@@ -1,7 +1,7 @@
 #include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include "d_hl_filescann_FileScanner.h"
+#include <jni.h>
 #include "filescanner.h"
 #include <time.h>
 
@@ -129,8 +129,7 @@ void recycleScanner(JNIEnv *env) {
     }
 }
 
-JNIEXPORT void JNICALL Java_d_hl_filescann_FileScanner_nativeInitScanner
-  (JNIEnv *env, jobject obj, jobjectArray sufArr, jint thdCount, jint depth, jboolean detail) {
+void jniInitScanner(JNIEnv *env, jobject obj, jobjectArray sufArr, jint thdCount, jint depth, jboolean detail) {
     if (isScaning) return;
     if (suffixs) {
         int i;
@@ -151,8 +150,8 @@ JNIEXPORT void JNICALL Java_d_hl_filescann_FileScanner_nativeInitScanner
             jobject jstr = (*env)->GetObjectArrayElement(env, sufArr, i);
             char* str = jStringToStr(env, (jstring)jstr);
 #if DEBUG
-        LOG("native scanner:match suffix:%s\n", str);
-        fflush(stdout);
+            LOG("native scanner:match suffix:%s\n", str);
+            fflush(stdout);
 #endif
             *(suffixs+i) = str;
             (*env)->DeleteLocalRef(env, jstr);
@@ -165,8 +164,7 @@ JNIEXPORT void JNICALL Java_d_hl_filescann_FileScanner_nativeInitScanner
     LOG("native scanner:init success\n");
 }
 
-JNIEXPORT void JNICALL Java_d_hl_filescann_FileScanner_nativeSetCallback
-  (JNIEnv * env, jobject jobj, jobject jcallback) {
+void jniSetCallback(JNIEnv * env, jobject jobj, jobject jcallback) {
     if (isScaning) return;
     glCallbackObj = (*env)->NewGlobalRef(env, jcallback);
     jclass jclazz = (*env)->GetObjectClass(env, jcallback);
@@ -198,8 +196,7 @@ JNIEXPORT void JNICALL Java_d_hl_filescann_FileScanner_nativeSetCallback
  * Method:    nativeStartScan
  * Signature: ([Ljava/lang/String;)V
  */
-JNIEXPORT void JNICALL Java_d_hl_filescann_FileScanner_nativeStartScan
-  (JNIEnv *env, jobject obj, jobjectArray jarr) {
+void jniStartScan(JNIEnv *env, jobject obj, jobjectArray jarr) {
     if (isScaning) {
         LOG("native scanner:isScaning-------------\n");
         return;
@@ -244,17 +241,42 @@ JNIEXPORT void JNICALL Java_d_hl_filescann_FileScanner_nativeStartScan
     }
 }
 
-JNIEXPORT void JNICALL Java_d_hl_filescann_FileScanner_nativeStopScan
-  (JNIEnv *env, jobject jobj) {
+void jniStopScan(JNIEnv *env, jobject jobj) {
     if (isScaning) {
         cancelScan();
     }
 }
 
-JNIEXPORT void JNICALL Java_d_hl_filescann_FileScanner_nativeRrecycle
-  (JNIEnv *env, jobject jobj) {
+void jniRecycle(JNIEnv *env, jobject jobj) {
     if (isScaning) {
         cancelScan();
     }
     recycleScanner(env);
+}
+
+static JNINativeMethod sScannerMethods[] = {
+        {"nativeInitScanner", "([Ljava/lang/String;IIZ)V", (void*)jniInitScanner},
+        {"nativeStartScan", "([Ljava/lang/String;)V", (void*)jniStartScan},
+        {"nativeSetCallback", "(Ld/hl/filescann/FileScanner$ScanCallback;)V", (void*)jniSetCallback},
+        {"nativeStopScan", "()V", (void*)jniStopScan},
+        {"nativeRrecycle", "()V", (void*)jniRecycle},
+};
+
+JNIEXPORT jint JNI_OnLoad(JavaVM* vm, void* reserved){
+    JNIEnv *env = NULL;
+    if ((*vm)->GetEnv(vm, (void **) &env, JNI_VERSION_1_4) != JNI_OK) {
+        return -1;
+    }
+
+    static const char* const className = "d/hl/filescann/FileScanner";
+
+    jclass clazz = (*env)->FindClass(env, className);
+    if(clazz == NULL) {
+        return -1;
+    }
+    if((*env)->RegisterNatives(env, clazz, sScannerMethods, sizeof(sScannerMethods) / sizeof(sScannerMethods[0])) != JNI_OK) {
+        return -1;
+    }
+
+    return JNI_VERSION_1_4;
 }
