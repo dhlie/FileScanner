@@ -257,9 +257,9 @@ void jniRecycle(JNIEnv *env, jobject jobj) {
 static JNINativeMethod sScannerMethods[] = {
         {"nativeInitScanner", "([Ljava/lang/String;IIZ)V", (void*)jniInitScanner},
         {"nativeStartScan", "([Ljava/lang/String;)V", (void*)jniStartScan},
-        {"nativeSetCallback", "(Ld/hl/filescann/FileScanner$ScanCallback;)V", (void*)jniSetCallback},
+        {"nativeSetCallback", "(Ld/hl/filescan/FileScanner$ScanCallback;)V", (void*)jniSetCallback},
         {"nativeStopScan", "()V", (void*)jniStopScan},
-        {"nativeRrecycle", "()V", (void*)jniRecycle},
+        {"nativeRecycle", "()V", (void*)jniRecycle},
 };
 
 JNIEXPORT jint JNI_OnLoad(JavaVM* vm, void* reserved){
@@ -268,7 +268,7 @@ JNIEXPORT jint JNI_OnLoad(JavaVM* vm, void* reserved){
         return -1;
     }
 
-    static const char* const className = "d/hl/filescann/FileScanner";
+    static const char* const className = "d/hl/filescan/FileScanner";
 
     jclass clazz = (*env)->FindClass(env, className);
     if(clazz == NULL) {

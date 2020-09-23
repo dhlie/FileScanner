@@ -1,4 +1,4 @@
-package d.hl.filescann;
+package d.hl.filescan;
 
 /**
  * Created by dhl on 17-8-27.
@@ -64,7 +64,7 @@ public class FileScanner {
     }
 
     public void recycle() {
-        nativeRrecycle();
+        nativeRecycle();
     }
 
 
@@ -72,5 +72,5 @@ public class FileScanner {
     private native void nativeSetCallback(ScanCallback callback);
     private native void nativeStartScan(String path[]);
     private native void nativeStopScan();
-    private native void nativeRrecycle();
+    private native void nativeRecycle();
 }

@@ -1,4 +1,4 @@
-package d.hl.filescann;
+package d.hl.filescan;
 
 import android.app.Activity;
 import android.os.Bundle;

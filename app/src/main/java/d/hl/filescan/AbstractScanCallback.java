@@ -1,4 +1,4 @@
-package d.hl.filescann;
+package d.hl.filescan;
 
 import java.util.HashMap;
 import java.util.LinkedList;
