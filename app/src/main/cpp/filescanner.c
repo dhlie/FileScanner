@@ -40,6 +40,16 @@ void (*onScannerFinish)(int isCancel) = NULL;
 void (*attachCallback)(void) = NULL;
 void (*detachCallback)(void) = NULL;
 
+//#include <sys/time.h>
+//typedef signed long long    s64;
+//typedef s64 zl_time;
+//zl_time systemTimeMillis()
+//{
+//    struct timeval tm;
+//    gettimeofday(&tm,NULL);
+//    return tm.tv_sec * 1000 + tm.tv_usec / 1000;
+//}
+
 #if DEBUG
 int mallocCount = 0;
 int freeCount = 0;

@@ -80,7 +80,7 @@ public class MainActivity extends Activity implements View.OnClickListener {
         lvList.setAdapter(mAdapter);
 
         int processorNum = Runtime.getRuntime().availableProcessors();
-        mThreadCount = Math.min(processorNum, 2);
+        mThreadCount = Math.min(processorNum, 1);
         mScanDepth = -1;//全盘扫描
         mNeedDetail = false;//是否获取文件详情
         mSuffixes = new String[]{};//查找所有文件
