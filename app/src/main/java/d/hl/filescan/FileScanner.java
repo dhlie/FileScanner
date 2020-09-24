@@ -44,9 +44,7 @@ public class FileScanner {
     }
 
     public void setScanCallback(ScanCallback cb) {
-        if (cb != null) {
-            nativeSetCallback(cb);
-        }
+        nativeSetCallback(cb);
     }
 
     /**
@@ -63,14 +61,8 @@ public class FileScanner {
         nativeStopScan();
     }
 
-    public void recycle() {
-        nativeRecycle();
-    }
-
-
     private native void nativeInitScanner(String[] suf, int thdCount, int depth, boolean getFileDetail);
     private native void nativeSetCallback(ScanCallback callback);
     private native void nativeStartScan(String path[]);
     private native void nativeStopScan();
-    private native void nativeRecycle();
 }

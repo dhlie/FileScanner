@@ -48,11 +48,12 @@ public class MainActivity extends Activity implements View.OnClickListener {
         @Override
         public void onScanFinish(final List<FileScanner.FindItem> files, final boolean isCancel) {
             final long time = System.currentTimeMillis() - mStartTime;
-            Log.i("Scanner", "Scanner java callback:  onFinish  time:"+time + "  count:"+files.size());
+            final int count = files == null ? 0 : files.size();
+            Log.i("Scanner", "Scanner java callback:  onFinish  time:"+time + "  count:"+count);
             runOnUiThread(new Runnable() {
                 @Override
                 public void run() {
-                    mTVINfo.setText("total:"+files.size() + " time:"+time+" thd:"+ mThreadCount +"  dp:"+ mScanDepth);
+                    mTVINfo.setText("total:"+count + " time:"+time+" thd:"+ mThreadCount +"  dp:"+ mScanDepth);
                     mAdapter.changeData(files);
                 }
             });
@@ -78,12 +79,10 @@ public class MainActivity extends Activity implements View.OnClickListener {
         btnSet.setOnClickListener(this);
         lvList.setAdapter(mAdapter);
 
-        int precessorNum = Runtime.getRuntime().availableProcessors();
-        precessorNum = precessorNum > 4 ? 4 : precessorNum;
-        mThreadCount = precessorNum;
+        int processorNum = Runtime.getRuntime().availableProcessors();
+        mThreadCount = Math.min(processorNum, 2);
         mScanDepth = -1;//全盘扫描
         mNeedDetail = false;//是否获取文件详情
-        mFileScanner = new FileScanner();
         mSuffixes = new String[]{};//查找所有文件
         //mSuffixes = new String[]{"mp3", "mp4", "avi", "rmvb"};
         //mSuffixes = new String[]{"jpg", "jpeg", "png", "bmp", "gif"};
@@ -91,22 +90,27 @@ public class MainActivity extends Activity implements View.OnClickListener {
         //        "WPS", "XLS", "XLSX", "ET", "PPT", "PPTX", "DPS"};
         mSuffixes = new String[]{"jpg", "jpeg", "png", "bmp", "gif", "mp3", "mp4", "avi", "rmvb", "wmv", "wma", "flav", "wav", "ogg", "mp2", "m4a", "au", "aac", "3gp", "3g2", "asf", "flv", "mov", "rm", "swf", "mpg", "EBK2","EBK3","TXT","EPUB","CHM","UMD","PDF", "OPUB", "DOC", "DOCX",
                 "WPS", "XLS", "XLSX", "ET", "PPT", "PPTX", "DPS"};
-        mFileScanner.initScanner(mSuffixes, mThreadCount, mScanDepth, mNeedDetail);
-        mFileScanner.setScanCallback(callback);
         String sdPath = Environment.getExternalStorageDirectory().getAbsolutePath();
         mScanPath = new String[] {sdPath};
         //mScanPath = new String[] {sdPath+"/Android/", sdPath+"/DCIM/"};
-        mFileScanner.startScan(mScanPath);
 
         mETDepth.setText(""+ mScanDepth);
         mETThread.setText(""+ mThreadCount);
         mCBDetail.setChecked(mNeedDetail);
     }
 
+    private void initFileScanner() {
+      mFileScanner = new FileScanner();
+      mFileScanner.initScanner(mSuffixes, mThreadCount, mScanDepth, mNeedDetail);
+      mFileScanner.setScanCallback(callback);
+      mFileScanner.startScan(mScanPath);
+    }
+
     @Override
     public void onClick(View view) {
         switch (view.getId()) {
             case R.id.tv_start:
+                initFileScanner();
                 mFileScanner.startScan(mScanPath);
                 break;
             case R.id.tv_stop:
@@ -118,17 +122,12 @@ public class MainActivity extends Activity implements View.OnClickListener {
                 String deep = mETDepth.getText().toString();
                 mScanDepth = Integer.parseInt(TextUtils.isEmpty(deep) ? "-1" : deep);
                 mNeedDetail = mCBDetail.isChecked();
+                initFileScanner();
                 mFileScanner.initScanner(mSuffixes, mThreadCount, mScanDepth, mNeedDetail);
                 mETDepth.setText(""+ mScanDepth);
                 mETThread.setText(""+ mThreadCount);
                 break;
         }
-    }
-
-    @Override
-    protected void onDestroy() {
-        super.onDestroy();
-        mFileScanner.recycle();
     }
 
     private class MyAdapter extends BaseAdapter {

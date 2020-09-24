@@ -11,7 +11,7 @@ import java.util.Map;
 
 public abstract class AbstractScanCallback implements FileScanner.ScanCallback {
 
-    private Map<Long, List<FileScanner.FindItem>> mFiles = new HashMap<>(500);
+    private Map<Long, List<FileScanner.FindItem>> mFiles = new HashMap<>();
 
     @Override
     public void onStart() {
