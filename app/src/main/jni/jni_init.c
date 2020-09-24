@@ -111,14 +111,13 @@ void onFinish(int isCancel) {
     fflush(stdout);
 #endif
 
-    isScanning = 0;
     JNIEnv* env;
     (*glJvm)->GetEnv(glJvm, (void**)&env, jniVer);
+    recycleScanner(env);
     if (glCallbackObj && onFinishId) {
         (*env)->CallVoidMethod(env, glCallbackObj, onFinishId, (jboolean) isCancel);
     }
-
-    recycleScanner(env);
+    isScanning = 0;
 }
 
 char* jStringToStr(JNIEnv *env, jstring jstr) {
