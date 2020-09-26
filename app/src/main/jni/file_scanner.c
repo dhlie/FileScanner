@@ -156,7 +156,7 @@ void releaseScanner(Scanner *scanner) {
 
 int isScanning(Scanner *scanner) {
     pthread_mutex_lock(scanner->mutex);
-    if (scanner->status == SCAN_STATUS_SCAN) {
+    if (scanner->exitThreadCount < scanner->createThreadCount) {
         pthread_mutex_unlock(scanner->mutex);
         return 1;
     }
@@ -230,8 +230,9 @@ int startScan(Scanner *scanner, int count, char **path) {
         scanner->pathNodes = NULL;
     }
     scanner->status = SCAN_STATUS_IDLE;
-    scanner->idleThreadCount = 0;
-    scanner->finishThreadCount = 0;
+    scanner->createThreadCount = 0;
+    scanner->waitingThreadCount = 0;
+    scanner->exitThreadCount = 0;
 
     //init scan dirs
     PathNode *scanNodes = NULL;
@@ -265,18 +266,17 @@ int startScan(Scanner *scanner, int count, char **path) {
         return -1;
     }
 
-    int createThreadCount = 0;
     for (i = 0; i < scanner->threadCount; i++) {
         pthread_t pt;
         if (pthread_create(&pt, NULL, threadScan, scanner)) {
             LOG("%s-%d:create thread fail\n", __FILE__, __LINE__);
             continue;
         }
-        createThreadCount++;
+        scanner->createThreadCount++;
     }
 
     //create thread fail
-    if (!createThreadCount) {
+    if (!scanner->createThreadCount) {
         LOG("%s-%d:createThreadCount = 0\n", __FILE__, __LINE__);
         pthread_mutex_unlock(scanner->mutex);
         return -1;
@@ -302,10 +302,10 @@ static void *threadScan(Scanner *scanner) {
         //thread will exit
         if (!dirNode) {
             pthread_mutex_lock(scanner->mutex);
-            scanner->finishThreadCount++;
+            scanner->exitThreadCount++;
             LOG("thread:%ld exit, finished thread count:%d, total count:%d\n", pthread_self(),
-                scanner->finishThreadCount, scanner->threadCount);
-            if (scanner->finishThreadCount == scanner->threadCount) {
+                scanner->exitThreadCount, scanner->createThreadCount);
+            if (scanner->exitThreadCount == scanner->createThreadCount) {
                 pthread_mutex_unlock(scanner->mutex);
                 scanner->onFinish(scanner, scanner->status == SCAN_STATUS_CANCEL ? 1 : 0);
                 logFinish();
@@ -414,13 +414,13 @@ static PathNode *takePathNode(Scanner *scanner) {
             pthread_mutex_unlock(scanner->mutex);
             return pathNode;
         } else {
-            if (scanner->idleThreadCount + 1 == scanner->threadCount) {
+            if (scanner->waitingThreadCount + 1 == scanner->createThreadCount) {
                 scanner->status = SCAN_STATUS_FINISH;
                 pthread_cond_broadcast(scanner->cond);
             } else {
-                scanner->idleThreadCount++;
+                scanner->waitingThreadCount++;
                 pthread_cond_wait(scanner->cond, scanner->mutex);
-                scanner->idleThreadCount--;
+                scanner->waitingThreadCount--;
             }
             pthread_mutex_unlock(scanner->mutex);
         }
@@ -440,12 +440,12 @@ static void checkFileExt(Scanner *scanner, const char *dir, const char *fileName
         return;
     }
 
-    char *suffix = strrchr(fileName, '.');
-    if (!suffix) return;
+    char *ext = strrchr(fileName, '.');
+    if (!ext) return;
 
     int i;
     for (i = 0; i < scanner->extCount; i++) {
-        if (strcasecmp(suffix + 1, *(scanner->fileExts + i)) == 0) {
+        if (strcasecmp(ext + 1, *(scanner->fileExts + i)) == 0) {
             doFindFile(scanner, dir, fileName);
             break;
         }

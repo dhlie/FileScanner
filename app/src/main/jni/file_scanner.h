@@ -58,8 +58,9 @@ typedef struct scanner {
     char **fileExts;        //需要扫描的文件后缀
     int extCount;           //文件类型个数
     int threadCount;        //扫描线程数
-    int idleThreadCount;    //空闲线程数
-    int finishThreadCount;  //扫描结束的线程数
+    int createThreadCount;  //实际创建成功的线程数
+    int waitingThreadCount; //等待状态的线程数
+    int exitThreadCount;    //扫描结束的线程数
     int scanDepth;          //目录扫描深度
     int status;             //扫描状态
     int fetchDetail;        //是否获取文件大小,最后修改时间

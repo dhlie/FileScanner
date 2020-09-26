@@ -55,16 +55,9 @@ public class ScannerActivity extends Activity implements View.OnClickListener {
     mETDepth.setText("-1");
     mETThread.setText("4");
     mCBDetail.setChecked(true);
-    mCBHideDir.setChecked(true);
-    mCBNoMedia.setChecked(true);
+    mCBHideDir.setChecked(false);
+    mCBNoMedia.setChecked(false);
 
-    String[] requiredPers = {
-            Manifest.permission.READ_EXTERNAL_STORAGE,
-            Manifest.permission.WRITE_EXTERNAL_STORAGE,
-    };
-    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-      requestPermissions(requiredPers, 100);
-    }
     startScan();
   }
 

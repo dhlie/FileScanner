@@ -89,7 +89,7 @@ public class FileScanner {
 
   /**
    * 扫描路径
-   *
+   * 每次开始扫描都要先设置回调,扫描结束回调自动释放
    * @param path :要扫描的路径数组
    */
   public void startScan(String[] path) {
