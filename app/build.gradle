@@ -9,10 +9,14 @@ android {
         targetSdkVersion 29
         versionCode 1
         versionName "1.0"
-        externalNativeBuild {
-            cmake {
-                cppFlags ""
-            }
+
+        ndk {
+            abiFilters  "armeabi-v7a"
+        }
+    }
+    sourceSets {
+        main {
+            jniLibs.srcDirs =['src/main/libs']
         }
     }
     buildTypes {
@@ -21,14 +25,11 @@ android {
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
         }
     }
-    externalNativeBuild {
-//        cmake {
-//            path "CMakeLists.txt"
+//    externalNativeBuild {
+//        ndkBuild {
+//            path 'src/main/jni/Android.mk'
 //        }
-        ndkBuild {
-            path 'src/main/jni/Android.mk'
-        }
-    }
+//    }
 }
 
 dependencies {
