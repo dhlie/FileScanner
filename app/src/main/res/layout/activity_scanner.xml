@@ -1,0 +1,99 @@
+<?xml version="1.0" encoding="utf-8"?>
+<RelativeLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent">
+
+    <Button
+        android:id="@+id/tv_start"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:padding="10dp"
+        android:text="Start"
+        />
+    <Button
+        android:id="@+id/tv_stop"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_toRightOf="@+id/tv_start"
+        android:layout_marginLeft="10dp"
+        android:padding="10dp"
+        android:text="Stop"
+        />
+    <TextView
+        android:id="@+id/tv_info"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_alignBaseline="@+id/tv_stop"
+        android:layout_toRightOf="@+id/tv_stop"
+        android:layout_marginLeft="10dp"
+        android:textSize="16sp"
+        />
+
+    <TextView
+        android:id="@+id/tv_thdcount"
+        android:layout_width="wrap_content"
+        android:layout_height="40dp"
+        android:layout_below="@+id/tv_start"
+        android:inputType="number"
+        android:gravity="bottom"
+        android:text="扫描线程数:"/>
+
+    <EditText
+        android:id="@+id/et_thd"
+        android:layout_width="60dp"
+        android:layout_height="40dp"
+        android:layout_below="@+id/tv_start"
+        android:layout_toRightOf="@+id/tv_thdcount"
+        android:inputType="number"
+        android:paddingLeft="10dp"
+        android:paddingRight="10dp"/>
+
+    <TextView
+        android:id="@+id/tv_dep"
+        android:layout_width="wrap_content"
+        android:layout_height="40dp"
+        android:layout_below="@+id/tv_start"
+        android:layout_toRightOf="@+id/et_thd"
+        android:layout_marginLeft="4dp"
+        android:gravity="bottom"
+        android:text="扫描目录层级:"/>
+    <EditText
+        android:id="@+id/et_depth"
+        android:layout_width="60dp"
+        android:layout_height="40dp"
+        android:layout_toRightOf="@+id/tv_dep"
+        android:layout_below="@+id/tv_start"
+        android:inputType="numberSigned"/>
+
+    <CheckBox
+        android:id="@+id/cb_detail"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_below="@+id/tv_thdcount"
+        android:text="文件大小"/>
+    <CheckBox
+        android:id="@+id/cb_hiddir"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_below="@+id/tv_thdcount"
+        android:layout_toRightOf="@+id/cb_detail"
+        android:text="隐藏目录"/>
+    <CheckBox
+        android:id="@+id/cb_nomedia"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_below="@+id/tv_thdcount"
+        android:layout_toRightOf="@+id/cb_hiddir"
+        android:text=".nomedia"/>
+
+    <ListView
+        android:id="@+id/lv"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:layout_below="@+id/cb_nomedia"
+        android:fastScrollEnabled="true"
+        android:layout_marginTop="10dp"
+        />
+
+</RelativeLayout>
