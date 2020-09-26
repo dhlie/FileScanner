@@ -1,25 +1,4 @@
-#include <stdarg.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <jni.h>
-#include "filescanner.h"
-#include <time.h>
-
-char*       path = NULL;
-char**      suffixs = NULL;
-char**      pathes = NULL;
-jmethodID   onStartId, onFindId, onFinishId;
-JavaVM*     glJvm;
-jobject     glCallbackObj = NULL;
-jint        jniVer;
-volatile int isScanning;
-
-extern int suffixCount;
-static int pathCount;
-
-#if DEBUG
-time_t      startTime;
-#endif
+#include "file_scanner.h"
 
 //-----------------JavaVM-----------------
 // jint        (*AttachCurrentThread)(JavaVM*, JNIEnv**, void*);
@@ -41,240 +20,261 @@ time_t      startTime;
 // jmethodID   (*GetMethodID)(JNIEnv*, jclass, const char*, const char*);
 // void        (*DeleteGlobalRef)(JNIEnv*, jobject);
 
-void onAttachThread() {
-    JNIEnv* env;
-    (*glJvm)->AttachCurrentThread(glJvm, &env, NULL);
-}
 
-void onDetachThread() {
-    (*glJvm)->DetachCurrentThread(glJvm);
-}
+typedef struct callback {
+    JavaVM *javaVM;
+    jobject glCallback;
+    jmethodID onStartMethodId;
+    jmethodID onFindMethodId;
+    jmethodID onFinishMethodId;
+} Callback;
 
-void recycleScanner(JNIEnv *env) {
-    if (path) {
-        free(path);
-        path = NULL;
-    }
-
-    if (glCallbackObj) {
-        (*env)->DeleteGlobalRef(env, glCallbackObj);
-        glCallbackObj = NULL;
-    }
-
-    if (suffixs) {
-        int i;
-        for (i = 0; i < suffixCount; i++) {
-            free(*(suffixs+i));
+void releaseJniRef(JNIEnv *env, Scanner *scanner) {
+    Callback *callback = (Callback *) scanner->callback;
+    if (callback) {
+        if (callback->glCallback) {
+            (*env)->DeleteGlobalRef(env, callback->glCallback);
+            callback->glCallback = NULL;
         }
-        free(suffixs);
-        suffixs = NULL;
-    }
 
-    if (pathes) {
-        int i;
-        for (i = 0; i < pathCount; i++) {
-            free(*(pathes+i));
+//    if (callback->onStartMethodId) {
+//        (*env)->DeleteLocalRef(env, callback->onStartMethodId);
+//    }
+//    if (callback->onFindMethodId) {
+//        (*env)->DeleteLocalRef(env, callback->onFindMethodId);
+//    }
+//    if (callback->onFinishMethodId) {
+//        (*env)->DeleteLocalRef(env, callback->onFinishMethodId);
+//    }
+
+        myFree(callback);
+    }
+}
+
+void onAttachThread(Scanner *scanner) {
+    Callback *callback = (Callback *) scanner->callback;
+    if (callback && callback->javaVM) {
+        JNIEnv *env;
+        (*callback->javaVM)->AttachCurrentThread(callback->javaVM, &env, NULL);
+    }
+}
+
+void onDetachThread(Scanner *scanner) {
+    Callback *callback = (Callback *) scanner->callback;
+    if (callback && callback->javaVM) {
+        (*callback->javaVM)->DetachCurrentThread(callback->javaVM);
+    }
+}
+
+void onStart(Scanner *scanner) {
+    Callback *callback = (Callback *) scanner->callback;
+    if (callback && callback->glCallback && callback->onStartMethodId) {
+        JNIEnv *env;
+        (*callback->javaVM)->GetEnv(callback->javaVM, (void **) &env, JNI_VERSION_1_6);
+        (*env)->CallVoidMethod(env, callback->glCallback, callback->onStartMethodId);
+    }
+}
+
+void onFind(Scanner *scanner, pthread_t threadId, const char *file, off_t size, time_t modify) {
+    Callback *callback = (Callback *) scanner->callback;
+    if (callback && callback->glCallback && callback->onFindMethodId) {
+        JNIEnv *env;
+        (*callback->javaVM)->GetEnv(callback->javaVM, (void **) &env, JNI_VERSION_1_6);
+        jstring pathJStr = (*env)->NewStringUTF(env, file);
+        (*env)->CallVoidMethod(env, callback->glCallback, callback->onFindMethodId,
+                               (jlong) threadId, pathJStr, (jlong) size, (jlong) modify);
+        (*env)->DeleteLocalRef(env, pathJStr);
+    }
+}
+
+void onFinish(Scanner *scanner, int isCancel) {
+    Callback *callback = (Callback *) scanner->callback;
+    if (callback && callback->javaVM) {
+        JNIEnv *env;
+        (*callback->javaVM)->GetEnv(callback->javaVM, (void **) &env, JNI_VERSION_1_6);
+        if (callback->glCallback && callback->onFinishMethodId) {
+            (*env)->CallVoidMethod(env, callback->glCallback, callback->onFinishMethodId,
+                                   (jboolean) isCancel);
         }
-        free(pathes);
-        pathes = NULL;
+        releaseJniRef(env, scanner);
     }
+
 }
 
-void onStart() {
-    isScanning = 1;
-#if DEBUG
-    startTime = time(NULL);
-    LOG("native callback-----scan start\n");
-#endif
-
-    if (glCallbackObj && onStartId) {
-        JNIEnv* env;
-        (*glJvm)->GetEnv(glJvm, (void**)&env, jniVer);
-        (*env)->CallVoidMethod(env, glCallbackObj, onStartId);
-    }
-}
-
-void onFind(pthread_t threadId, const char *file, off_t size, time_t modify) {
-    if (glCallbackObj && onFindId) {
-        JNIEnv* env;
-        (*glJvm)->GetEnv(glJvm, (void**)&env, jniVer);
-        jstring jstr = (*env)->NewStringUTF(env, file);
-        (*env)->CallVoidMethod(env, glCallbackObj, onFindId, (jlong) threadId, jstr, (jlong) size, (jlong) modify);
-        (*env)->DeleteLocalRef(env, jstr);
-    }
-}
-
-void onFinish(int isCancel) {
-
-#if DEBUG
-    LOG("native callback-----scan finish   time:%ld\n", time(NULL)-startTime);
-    fflush(stdout);
-#endif
-
-    JNIEnv* env;
-    (*glJvm)->GetEnv(glJvm, (void**)&env, jniVer);
-    recycleScanner(env);
-    if (glCallbackObj && onFinishId) {
-        (*env)->CallVoidMethod(env, glCallbackObj, onFinishId, (jboolean) isCancel);
-    }
-    isScanning = 0;
-}
-
-char* jStringToStr(JNIEnv *env, jstring jstr) {
+static char *jStringToStr(JNIEnv *env, jstring jstr) {
     int length = (*env)->GetStringUTFLength(env, jstr);
     if (length == 0) return 0;
-    const char* str = (*env)->GetStringUTFChars(env, jstr, 0);
-    char* s = (char*)malloc(strlen(str)+1);
-    strcpy(s, str);
+    const char *str = (*env)->GetStringUTFChars(env, jstr, 0);
+    char *chrArr = (char *) myMalloc(strlen(str) + 1);
+    strcpy(chrArr, str);
     (*env)->ReleaseStringUTFChars(env, jstr, str);
-    return s;
+    return chrArr;
 }
 
-void jniInitScanner(JNIEnv *env, jobject obj, jobjectArray sufArr, jint thdCount, jint depth, jboolean detail) {
-    if (isScanning) return;
-    if (suffixs) {
-        int i;
-        for (i = 0; i < suffixCount; i++) {
-            free(*(suffixs+i));
-        }
-        free(suffixs);
-        suffixs = NULL;
-    }
+JNIEXPORT jlong jniCreate(JNIEnv *env, jobject obj) {
+    Scanner *scanner = createScanner();
 
-    jniVer = (*env)->GetVersion(env);
-    (*env)->GetJavaVM(env, &glJvm);
+    Callback *callback = myMalloc(sizeof(Callback));
+    memset(callback, 0, sizeof(Callback));
+    (*env)->GetJavaVM(env, &(callback->javaVM));
+    scanner->callback = callback;
+
+    LOG("native scanner:jniCreate\n");
+    return (jlong) scanner;
+}
+
+JNIEXPORT void jniRelease(JNIEnv *env, jobject obj, jlong handle) {
+    if (!handle) return;
+    Scanner *scanner = (Scanner *) handle;
+    releaseScanner(scanner);
+    LOG("native scanner:jniRelease\n");
+}
+
+JNIEXPORT void jniScanHideDir(JNIEnv *env, jobject obj, jlong handle, jboolean scan) {
+    if (!handle) return;
+    Scanner *scanner = (Scanner *) handle;
+    scanner->scanHideDir = scan;
+    LOG("native scanner:jniScanHideDir:%d\n", scan);
+}
+
+JNIEXPORT void jniScanNoMediaDir(JNIEnv *env, jobject obj, jlong handle, jboolean scan) {
+    if (!handle) return;
+    Scanner *scanner = (Scanner *) handle;
+    scanner->scanNoMediaDir = scan;
+    LOG("native scanner:jniScanNoMediaDir:%d\n", scan);
+}
+
+JNIEXPORT void
+jniInitScanner(JNIEnv *env, jobject obj, jlong handle, jobjectArray sufArr, jint thdCount,
+               jint depth,
+               jboolean detail) {
+    if (!handle) return;
+    Scanner *scanner = (Scanner *) handle;
+    LOG("native scanner:jniInitScanner\n");
+
     jsize size = (*env)->GetArrayLength(env, sufArr);
+    char **exts = NULL;
     if (size > 0) {
-        suffixs = (char**)malloc(sizeof(char*)*size);
+        exts = (char **) myMalloc(sizeof(char *) * size);
+        (*env)->PushLocalFrame(env, size);
         int i;
         for (i = 0; i < size; i++) {
-            jobject jstr = (*env)->GetObjectArrayElement(env, sufArr, i);
-            char* str = jStringToStr(env, (jstring)jstr);
-#if DEBUG
-            LOG("native scanner:match suffix:%s\n", str);
-            fflush(stdout);
-#endif
-            *(suffixs+i) = str;
-            (*env)->DeleteLocalRef(env, jstr);
+            jobject extJStr = (*env)->GetObjectArrayElement(env, sufArr, i);
+            char *ext = jStringToStr(env, (jstring) extJStr);
+            *(exts + i) = ext;
         }
+        (*env)->PopLocalFrame(env, NULL);
     }
 
-    initScanner(size, suffixs, thdCount, depth, detail);
-    setCallbacks(onStart, onFind, onFinish);
-    setThreadAttachCallback(onAttachThread, onDetachThread);
-    LOG("native scanner:init success\n");
+    initScanner(scanner, size, exts, thdCount, depth, detail);
+    setCallbacks(scanner, onStart, onFind, onFinish);
+    setThreadAttachCallback(scanner, onAttachThread, onDetachThread);
 }
 
-void jniSetCallback(JNIEnv * env, jobject jobj, jobject jcallback) {
-    if (isScanning) return;
-    if (jcallback == NULL) {
-        if (glCallbackObj) {
-            (*env)->DeleteGlobalRef(env, glCallbackObj);
-            glCallbackObj = NULL;
+JNIEXPORT void jniStartScan(JNIEnv *env, jobject obj, jlong handle, jobjectArray jPathArr) {
+    if (!handle) return;
+    Scanner *scanner = (Scanner *) handle;
+    LOG("native scanner:jniStartScan\n");
+
+    jsize size = (*env)->GetArrayLength(env, jPathArr);
+    if (size > 0) {
+        char **pathArr = (char **) myMalloc(sizeof(char *) * size);
+        (*env)->PushLocalFrame(env, size);
+        int i;
+        for (i = 0; i < size; i++) {
+            jobject jPathStr = (*env)->GetObjectArrayElement(env, jPathArr, i);
+            char *str = jStringToStr(env, (jstring) jPathStr);
+            size_t len = strlen(str);
+            //去掉路径结尾的'/'
+            if (len > 1 && str[len - 1] == '/') {
+                str[len - 1] = '\0';
+            }
+            *(pathArr + i) = str;
         }
+        (*env)->PopLocalFrame(env, NULL);
+
+        startScan(scanner, size, pathArr);
+
+        for (i = 0; i < size; i++) {
+            myFree(*(pathArr + i));
+        }
+        myFree(pathArr);
+    }
+
+}
+
+JNIEXPORT void jniSetCallback(JNIEnv *env, jobject obj, jlong handle, jobject jCallback) {
+
+    if (!handle) return;
+    Scanner *scanner = (Scanner *) handle;
+    LOG("native scanner:jniSetCallback\n");
+
+    if (jCallback == NULL) {
+        setCallbacks(scanner, NULL, NULL, NULL);
         return;
     }
-    glCallbackObj = (*env)->NewGlobalRef(env, jcallback);
-    jclass jclazz = (*env)->GetObjectClass(env, jcallback);
-    onStartId = (*env)->GetMethodID(env, jclazz, "onStart", "()V");
-    if (onStartId == NULL) {
-        recycleScanner(env);
+
+    Callback *callback = (Callback *) scanner->callback;
+
+    callback->glCallback = (*env)->NewGlobalRef(env, jCallback);
+    jclass jClass = (*env)->GetObjectClass(env, jCallback);
+    callback->onStartMethodId = (*env)->GetMethodID(env, jClass, "onStart", "()V");
+    if (callback->onStartMethodId == NULL) {
         LOG("native scanner:method onStart find fail\n");
         return;
     }
 
-    onFindId = (*env)->GetMethodID(env, jclazz, "onFind", "(JLjava/lang/String;JJ)V");
-    if (onFindId == NULL) {
-        recycleScanner(env);
+    callback->onFindMethodId = (*env)->GetMethodID(env, jClass, "onFind",
+                                                   "(JLjava/lang/String;JJ)V");
+    if (callback->onFindMethodId == NULL) {
         LOG("native scanner:method onFind find fail\n");
         return;
     }
 
-    onFinishId = (*env)->GetMethodID(env, jclazz, "onFinish", "(Z)V");
-    if (onFinishId == NULL) {
-        recycleScanner(env);
+    callback->onFinishMethodId = (*env)->GetMethodID(env, jClass, "onFinish", "(Z)V");
+    if (callback->onFinishMethodId == NULL) {
         LOG("native scanner:method onFinish find fail\n");
         return;
     }
-    (*env)->DeleteLocalRef(env, jclazz);
+    setCallbacks(scanner, onStart, onFind, onFinish);
+    scanner->callback = callback;
+    (*env)->DeleteLocalRef(env, jClass);
 }
 
-/*
- * Class:     d_hl_filescann_FileScanner
- * Method:    nativeStartScan
- * Signature: ([Ljava/lang/String;)V
- */
-void jniStartScan(JNIEnv *env, jobject obj, jobjectArray jarr) {
-    if (isScanning) {
-        LOG("native scanner:isScanning-------------\n");
-        return;
-    }
-    isScanning = 1;
+JNIEXPORT void jniStopScan(JNIEnv *env, jobject obj, jlong handle) {
+    if (!handle) return;
+    Scanner *scanner = (Scanner *) handle;
+    LOG("native scanner:jniStopScan\n");
 
-    if (pathes) {
-        int i;
-        for (i = 0; i < pathCount; i++) {
-            free(*(pathes+i));
-        }
-        free(pathes);
-        pathes = NULL;
-    }
-
-    jsize size = (*env)->GetArrayLength(env, jarr);
-    if (size > 0) {
-        pathes = (char**)malloc(sizeof(char*)*size);
-        int i;
-        for (i = 0; i < size; i++) {
-            jobject jstr = (*env)->GetObjectArrayElement(env, jarr, i);
-            char* str = jStringToStr(env, (jstring)jstr);
-            //去掉路径结尾的'/'
-            if (str[strlen(str) - 1] == '/') {
-                size_t len = strlen(str);
-                char* str2 = (char*)malloc(len);
-                strncpy(str2, str, len);
-                str2[len - 1] = '\0';
-                *(pathes+i) = str2;
-                free(str);
-            } else {
-                *(pathes+i) = str;
-            }
-            (*env)->DeleteLocalRef(env, jstr);
-        }
-        pathCount = size;
-        if (startScan(size, pathes)) {
-            isScanning = 0;
-        }
-    } else {
-        isScanning = 0;
-    }
-}
-
-void jniStopScan(JNIEnv *env, jobject jobj) {
-    if (isScanning) {
-        cancelScan();
-    }
+    cancelScan(scanner);
 }
 
 static JNINativeMethod sScannerMethods[] = {
-        {"nativeInitScanner", "([Ljava/lang/String;IIZ)V", (void*)jniInitScanner},
-        {"nativeStartScan", "([Ljava/lang/String;)V", (void*)jniStartScan},
-        {"nativeSetCallback", "(Ld/hl/filescan/FileScanner$ScanCallback;)V", (void*)jniSetCallback},
-        {"nativeStopScan", "()V", (void*)jniStopScan},
+        {"nativeCreate",              "()J",                                              (void *) jniCreate},
+        {"nativeRelease",             "(J)V",                                             (void *) jniRelease},
+        {"nativeInitScanner",         "(J[Ljava/lang/String;IIZ)V",                       (void *) jniInitScanner},
+        {"nativeSetHideDirEnable",    "(JZ)V",                                            (void *) jniScanHideDir},
+        {"nativeSetNoMediaDirEnable", "(JZ)V",                                            (void *) jniScanNoMediaDir},
+        {"nativeStartScan",           "(J[Ljava/lang/String;)V",                          (void *) jniStartScan},
+        {"nativeSetCallback",         "(JLd/hl/filescan/FileScanner$ScanCallback;)V",     (void *) jniSetCallback},
+        {"nativeStopScan",            "(J)V",                                             (void *) jniStopScan},
 };
 
-JNIEXPORT jint JNI_OnLoad(JavaVM* vm, void* reserved){
+JNIEXPORT jint JNI_OnLoad(JavaVM *vm, void *reserved) {
+    LOG("native scanner:JNI_OnLoad\n");
     JNIEnv *env = NULL;
     if ((*vm)->GetEnv(vm, (void **) &env, JNI_VERSION_1_6) != JNI_OK) {
         return -1;
     }
 
-    static const char* const className = "d/hl/filescan/FileScanner";
+    static const char *const className = "d/hl/filescan/FileScanner";
 
     jclass clazz = (*env)->FindClass(env, className);
-    if(clazz == NULL) {
+    if (clazz == NULL) {
         return -1;
     }
-    if((*env)->RegisterNatives(env, clazz, sScannerMethods, sizeof(sScannerMethods) / sizeof(sScannerMethods[0])) != JNI_OK) {
+    if ((*env)->RegisterNatives(env, clazz, sScannerMethods,
+                                sizeof(sScannerMethods) / sizeof(sScannerMethods[0])) != JNI_OK) {
         return -1;
     }
 
