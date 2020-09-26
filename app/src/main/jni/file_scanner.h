@@ -11,7 +11,7 @@
 #include <pthread.h>
 #include <jni.h>
 
-#define AND_DEBUG   1
+#define AND_DEBUG   0
 #define DEBUG       0
 
 #if AND_DEBUG

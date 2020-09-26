@@ -1,6 +1,8 @@
 package d.hl.filescan;
 
+import android.Manifest;
 import android.app.Activity;
+import android.os.Build;
 import android.os.Bundle;
 import android.os.Environment;
 import android.text.TextUtils;
@@ -98,6 +100,14 @@ public class MainActivity extends Activity implements View.OnClickListener {
     mETDepth.setText("" + mScanDepth);
     mETThread.setText("" + mThreadCount);
     mCBDetail.setChecked(mNeedDetail);
+
+    String[] requiredPers = {
+            Manifest.permission.READ_EXTERNAL_STORAGE,
+            Manifest.permission.WRITE_EXTERNAL_STORAGE,
+    };
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+      requestPermissions(requiredPers, 100);
+    }
   }
 
   private void initFileScanner() {
