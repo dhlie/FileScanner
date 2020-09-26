@@ -39,6 +39,7 @@ public abstract class AbstractScanCallback implements FileScanner.ScanCallback {
         items.addAll(list);
       }
     }
+    mFiles.clear();
     onScanFinish(items, isCancel);
   }
 

@@ -40,12 +40,7 @@ public class MainActivity extends Activity implements View.OnClickListener {
       runOnUiThread(new Runnable() {
         @Override
         public void run() {
-          String thd = mETThread.getText().toString();
-          int threadCount = Integer.parseInt(TextUtils.isEmpty(thd) ? "1" : thd);
-          String deep = mETDepth.getText().toString();
-          int scanDepth = Integer.parseInt(TextUtils.isEmpty(deep) ? "-1" : deep);
-
-          mTVINfo.setText("扫描中...  total:0 time:0 线程:" + threadCount + "  层级:" + scanDepth);
+          mTVINfo.setText("扫描中...");
           mAdapter.changeData(null);
         }
       });
@@ -60,12 +55,7 @@ public class MainActivity extends Activity implements View.OnClickListener {
       runOnUiThread(new Runnable() {
         @Override
         public void run() {
-          String thd = mETThread.getText().toString();
-          int threadCount = Integer.parseInt(TextUtils.isEmpty(thd) ? "1" : thd);
-          String deep = mETDepth.getText().toString();
-          int scanDepth = Integer.parseInt(TextUtils.isEmpty(deep) ? "-1" : deep);
-
-          mTVINfo.setText("total:" + count + " time:" + time + " 线程:" + threadCount + "  层级:" + scanDepth);
+          mTVINfo.setText("files:" + count + "    time:" + time);
           mAdapter.changeData(files);
           mFileScanner.recycle();
           mFileScanner = null;
