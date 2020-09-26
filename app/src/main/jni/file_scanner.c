@@ -116,9 +116,6 @@ Scanner *createScanner() {
 
 void releaseScanner(Scanner *scanner) {
     if (!scanner) return;
-    if (scanner->onRecycleCallback) {
-        scanner->onRecycleCallback(scanner);
-    }
     if (scanner->fileExts) {
         int i;
         for (i = 0; i < scanner->extCount; i++) {
@@ -148,10 +145,12 @@ void releaseScanner(Scanner *scanner) {
     myFree(scanner);
 
 #if DEBUG || AND_DEBUG
+    pthread_mutex_lock(&debugMutex);
     LOG("release scanner\n");
     LOG("malloc-free count: %d - %d,  open-close dir count:%d - %d\n", mallocCount, freeCount,
         openDirCount, closeDirCount);
     findCount = mallocCount = freeCount = openDirCount = closeDirCount = 0;
+    pthread_mutex_unlock(&debugMutex);
 #endif
 }
 
@@ -194,13 +193,11 @@ void initScanner(Scanner *scanner, int extCount, char **exts, int thdCount, int 
 void setCallbacks(Scanner *scanner,
                   void (*start)(Scanner *scanner),
                   void (*find)(Scanner *scanner, pthread_t threadId, const char *file, off_t size, time_t modify),
-                  void (*finish)(Scanner *scanner, int isCancel),
-                  void (*recycleCallback)(Scanner *scanner)) {
+                  void (*finish)(Scanner *scanner, int isCancel)) {
     if (!scanner) return;
     scanner->onStart = start;
     scanner->onFind = find;
     scanner->onFinish = finish;
-    scanner->onRecycleCallback = recycleCallback;
 }
 
 void cancelScan(Scanner *scanner) {
@@ -309,11 +306,14 @@ static void *threadScan(Scanner *scanner) {
             LOG("thread:%ld exit, finished thread count:%d, total count:%d\n", pthread_self(),
                 scanner->finishThreadCount, scanner->threadCount);
             if (scanner->finishThreadCount == scanner->threadCount) {
+                pthread_mutex_unlock(scanner->mutex);
                 scanner->onFinish(scanner, scanner->status == SCAN_STATUS_CANCEL ? 1 : 0);
+                logFinish();
                 if (scanner->recycleOnFinish) {
+                    if (scanner->detachJVMThreadCallback) scanner->detachJVMThreadCallback(scanner);
                     releaseScanner(scanner);
                 }
-                logFinish();
+                return NULL;
             }
             pthread_cond_signal(scanner->cond);
             pthread_mutex_unlock(scanner->mutex);

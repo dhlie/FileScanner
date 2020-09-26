@@ -49,8 +49,6 @@ typedef struct scanner {
 
     void (*onFinish)(struct scanner *scanner, int isCancel);
 
-    void (*onRecycleCallback)(struct scanner *scanner);
-
     void (*attachJVMThreadCallback)(struct scanner *scanner);
 
     void (*detachJVMThreadCallback)(struct scanner *scanner);
@@ -107,8 +105,7 @@ initScanner(Scanner *scanner, int sufCount, char **suf, int thdCount, int depth,
 void setCallbacks(Scanner *scanner,
                   void (*start)(Scanner *scanner),
                   void (*find)(Scanner *scanner, pthread_t threadId, const char *file, off_t size, time_t modify),
-                  void (*finish)(Scanner *scanner, int isCancel),
-                  void (*recycleCallback)(Scanner *scanner));
+                  void (*finish)(Scanner *scanner, int isCancel));
 
 /**
  * 开始扫描

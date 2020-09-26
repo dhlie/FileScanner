@@ -42,14 +42,11 @@ public class FileScanner {
 
   @Override
   protected void finalize() throws Throwable {
-    try {
-      Log.i("dhl", "FileScanner finalize");
-      if (mHandle != 0) {
-        nativeRelease(mHandle);
-        mHandle = 0;
-      }
-    } finally {
-      super.finalize();
+    Log.i("dhl", "FileScanner finalize");
+    super.finalize();
+    if (mHandle != 0) {
+      nativeRelease(mHandle);
+      mHandle = 0;
     }
   }
 

@@ -33,35 +33,6 @@ public class ScannerActivity extends Activity implements View.OnClickListener {
   private FileScanner mFileScanner;
   private long mStartTime;
 
-  private FileScanner.ScanCallback callback = new AbstractScanCallback() {
-    @Override
-    public void onScanStart() {
-      mStartTime = System.currentTimeMillis();
-      runOnUiThread(new Runnable() {
-        @Override
-        public void run() {
-          mTVINfo.setText("扫描中...");
-          mAdapter.changeData(null);
-        }
-      });
-    }
-
-    @Override
-    public void onScanFinish(final List<FileScanner.FindItem> files, final boolean isCancel) {
-      final long time = System.currentTimeMillis() - mStartTime;
-      final int count = files == null ? 0 : files.size();
-      Log.i("Scanner", "Scanner java callback:  onFinish  time:" + time + "  count:" + count);
-
-      runOnUiThread(new Runnable() {
-        @Override
-        public void run() {
-          mTVINfo.setText("files:" + count + "    time:" + time);
-          mAdapter.changeData(files);
-        }
-      });
-    }
-  };
-
   @Override
   protected void onCreate(Bundle savedInstanceState) {
     super.onCreate(savedInstanceState);
@@ -100,28 +71,8 @@ public class ScannerActivity extends Activity implements View.OnClickListener {
   @Override
   protected void onDestroy() {
     super.onDestroy();
+    if (mFileScanner != null) mFileScanner.stopScan();
     System.gc();
-  }
-
-  private void initFileScanner() {
-    if (mFileScanner == null) {
-      mFileScanner = new FileScanner();
-    }
-
-    String[] suffixes = new String[]{};//查找所有文件
-    suffixes = new String[]{"jpg", "jpeg", "png", "bmp", "gif", "mp3", "mp4", "avi", "rmvb", "wmv", "wma", "flav", "wav", "ogg", "mp2", "m4a", "au", "aac", "3gp", "3g2", "asf", "flv", "mov", "rm", "swf", "mpg", "EBK2", "EBK3", "TXT", "EPUB", "CHM", "UMD", "PDF", "OPUB", "DOC", "DOCX",
-            "WPS", "XLS", "XLSX", "ET", "PPT", "PPTX", "DPS"};
-
-    String thd = mETThread.getText().toString();
-    int threadCount = Integer.parseInt(TextUtils.isEmpty(thd) ? "1" : thd);
-
-    String deep = mETDepth.getText().toString();
-    int scanDepth = Integer.parseInt(TextUtils.isEmpty(deep) ? "-1" : deep);
-
-    mFileScanner.setHideDirScanEnable(mCBHideDir.isChecked());
-    mFileScanner.setNoMediaDirScanEnable(mCBNoMedia.isChecked());
-    mFileScanner.initScanner(suffixes, threadCount, scanDepth, mCBDetail.isChecked());
-    mFileScanner.setScanCallback(callback);
   }
 
   @Override
@@ -137,7 +88,52 @@ public class ScannerActivity extends Activity implements View.OnClickListener {
   }
 
   private void startScan() {
-    initFileScanner();
+    if (mFileScanner != null) {
+      mFileScanner.stopScan();
+    }
+    mFileScanner = new FileScanner();
+
+    String[] suffixes = new String[]{};//查找所有文件
+    suffixes = new String[]{"jpg", "jpeg", "png", "bmp", "gif", "mp3", "mp4", "avi", "rmvb", "wmv", "wma", "flav", "wav", "ogg", "mp2", "m4a", "au", "aac", "3gp", "3g2", "asf", "flv", "mov", "rm", "swf", "mpg", "EBK2", "EBK3", "TXT", "EPUB", "CHM", "UMD", "PDF", "OPUB", "DOC", "DOCX",
+            "WPS", "XLS", "XLSX", "ET", "PPT", "PPTX", "DPS"};
+
+    String thd = mETThread.getText().toString();
+    int threadCount = Integer.parseInt(TextUtils.isEmpty(thd) ? "1" : thd);
+
+    String deep = mETDepth.getText().toString();
+    int scanDepth = Integer.parseInt(TextUtils.isEmpty(deep) ? "-1" : deep);
+
+    mFileScanner.setHideDirScanEnable(mCBHideDir.isChecked());
+    mFileScanner.setNoMediaDirScanEnable(mCBNoMedia.isChecked());
+    mFileScanner.initScanner(suffixes, threadCount, scanDepth, mCBDetail.isChecked());
+    mFileScanner.setScanCallback(new AbstractScanCallback() {
+      @Override
+      public void onScanStart() {
+        mStartTime = System.currentTimeMillis();
+        runOnUiThread(new Runnable() {
+          @Override
+          public void run() {
+            mTVINfo.setText("扫描中...");
+            mAdapter.changeData(null);
+          }
+        });
+      }
+
+      @Override
+      public void onScanFinish(final List<FileScanner.FindItem> files, final boolean isCancel) {
+        final long time = System.currentTimeMillis() - mStartTime;
+        final int count = files == null ? 0 : files.size();
+        Log.i("Scanner", "Scanner java callback:  onFinish  time:" + time + "  count:" + count);
+
+        runOnUiThread(new Runnable() {
+          @Override
+          public void run() {
+            mTVINfo.setText("files:" + count + "    time:" + time);
+            mAdapter.changeData(files);
+          }
+        });
+      }
+    });
 
     String sdPath = Environment.getExternalStorageDirectory().getAbsolutePath();
     String[] scanPath = new String[]{sdPath};

@@ -1,25 +1,5 @@
 #include "file_scanner.h"
 
-//-----------------JavaVM-----------------
-// jint        (*AttachCurrentThread)(JavaVM*, JNIEnv**, void*);
-// jint        (*DetachCurrentThread)(JavaVM*);
-// jint        (*GetEnv)(JavaVM*, void**, jint);
-
-//-----------------JNIEnv-----------------
-// void        (*CallVoidMethod)(JNIEnv*, jobject, jmethodID, ...);
-// jstring     (*NewStringUTF)(JNIEnv*, const char*);
-// jsize       (*GetStringUTFLength)(JNIEnv*, jstring);
-// const char* (*GetStringUTFChars)(JNIEnv*, jstring, jboolean*);
-// void        (*ReleaseStringUTFChars)(JNIEnv*, jstring, const char*);
-// jobject     (*NewGlobalRef)(JNIEnv*, jobject);
-// jint        (*GetJavaVM)(JNIEnv*, JavaVM**);
-// jint        (*GetVersion)(JNIEnv *);
-// jsize       (*GetArrayLength)(JNIEnv*, jarray);
-// jobject     (*GetObjectArrayElement)(JNIEnv*, jobjectArray, jsize);
-// jclass      (*GetObjectClass)(JNIEnv*, jobject);
-// jmethodID   (*GetMethodID)(JNIEnv*, jclass, const char*, const char*);
-// void        (*DeleteGlobalRef)(JNIEnv*, jobject);
-
 
 typedef struct callback {
     JavaVM *javaVM;
@@ -29,26 +9,20 @@ typedef struct callback {
     jmethodID onFinishMethodId;
 } Callback;
 
-void releaseJniRef(JNIEnv *env, Scanner *scanner) {
+void releaseCallback(Scanner *scanner) {
     Callback *callback = (Callback *) scanner->callback;
     if (callback) {
+        JNIEnv *env;
+        (*callback->javaVM)->GetEnv(callback->javaVM, (void **) &env, JNI_VERSION_1_6);
         if (callback->glCallback) {
             (*env)->DeleteGlobalRef(env, callback->glCallback);
             callback->glCallback = NULL;
         }
 
-//    if (callback->onStartMethodId) {
-//        (*env)->DeleteLocalRef(env, callback->onStartMethodId);
-//    }
-//    if (callback->onFindMethodId) {
-//        (*env)->DeleteLocalRef(env, callback->onFindMethodId);
-//    }
-//    if (callback->onFinishMethodId) {
-//        (*env)->DeleteLocalRef(env, callback->onFinishMethodId);
-//    }
-
         myFree(callback);
+        scanner->callback = NULL;
     }
+
 }
 
 void onAttachThread(Scanner *scanner) {
@@ -93,26 +67,10 @@ void onFinish(Scanner *scanner, int isCancel) {
         JNIEnv *env;
         (*callback->javaVM)->GetEnv(callback->javaVM, (void **) &env, JNI_VERSION_1_6);
         if (callback->glCallback && callback->onFinishMethodId) {
-            (*env)->CallVoidMethod(env, callback->glCallback, callback->onFinishMethodId,
-                                   (jboolean) isCancel);
+            (*env)->CallVoidMethod(env, callback->glCallback, callback->onFinishMethodId, (jboolean) isCancel);
         }
     }
-
-}
-
-void recycleCallback(Scanner *scanner) {
-    Callback *callback = (Callback *) scanner->callback;
-    if (callback) {
-        JNIEnv *env;
-        (*callback->javaVM)->GetEnv(callback->javaVM, (void **) &env, JNI_VERSION_1_6);
-        if (callback->glCallback) {
-            (*env)->DeleteGlobalRef(env, callback->glCallback);
-            callback->glCallback = NULL;
-        }
-
-        myFree(callback);
-    }
-
+    releaseCallback(scanner);
 }
 
 static char *jStringToStr(JNIEnv *env, jstring jstr) {
@@ -134,12 +92,12 @@ JNIEXPORT jlong jniCreate(JNIEnv *env, jobject obj) {
 JNIEXPORT void jniRelease(JNIEnv *env, jobject obj, jlong handle) {
     if (!handle) return;
     Scanner *scanner = (Scanner *) handle;
+    LOG("native scanner:jniRelease\n");
     scanner->recycleOnFinish = 1;
     if (isScanning(scanner)) {
         cancelScan(scanner);
     } else {
         releaseScanner(scanner);
-        LOG("native scanner:jniRelease\n");
     }
 }
 
@@ -185,7 +143,7 @@ jniInitScanner(JNIEnv *env, jobject obj, jlong handle, jobjectArray sufArr, jint
     }
 
     initScanner(scanner, size, exts, thdCount, depth, detail);
-    setCallbacks(scanner, onStart, onFind, onFinish, recycleCallback);
+    setCallbacks(scanner, onStart, onFind, onFinish);
     setThreadAttachCallback(scanner, onAttachThread, onDetachThread);
 }
 
@@ -229,7 +187,7 @@ JNIEXPORT void jniSetCallback(JNIEnv *env, jobject obj, jlong handle, jobject jC
     if (isScanning(scanner)) return;
     LOG("native scanner:jniSetCallback\n");
 
-    recycleCallback(scanner);
+    releaseCallback(scanner);
 
     if (jCallback == NULL) {
         return;
