@@ -351,7 +351,7 @@ static void *threadScan(Scanner *scanner) {
             }
 
             if (subFile->d_type == DT_DIR) {
-                if (scanner->scanDepth == -1 || (dirNode->depth + 1) < scanner->scanDepth) {
+                if (scanner->scanDepth == -1 || (dirNode->depth + 1) <= scanner->scanDepth) {
                     PathNode *subDir = (PathNode *) myMalloc(sizeof(PathNode));
                     if (subDir) {
                         char *fileName = (char *) myMalloc(
