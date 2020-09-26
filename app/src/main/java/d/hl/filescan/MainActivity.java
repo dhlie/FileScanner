@@ -57,8 +57,6 @@ public class MainActivity extends Activity implements View.OnClickListener {
         public void run() {
           mTVINfo.setText("files:" + count + "    time:" + time);
           mAdapter.changeData(files);
-          mFileScanner.recycle();
-          mFileScanner = null;
         }
       });
     }

@@ -116,6 +116,9 @@ Scanner *createScanner() {
 
 void releaseScanner(Scanner *scanner) {
     if (!scanner) return;
+    if (scanner->onRecycleCallback) {
+        scanner->onRecycleCallback(scanner);
+    }
     if (scanner->fileExts) {
         int i;
         for (i = 0; i < scanner->extCount; i++) {
@@ -152,6 +155,16 @@ void releaseScanner(Scanner *scanner) {
 #endif
 }
 
+int isScanning(Scanner *scanner) {
+    pthread_mutex_lock(scanner->mutex);
+    if (scanner->status == SCAN_STATUS_SCAN) {
+        pthread_mutex_unlock(scanner->mutex);
+        return 1;
+    }
+    pthread_mutex_unlock(scanner->mutex);
+    return 0;
+}
+
 void initScanner(Scanner *scanner, int extCount, char **exts, int thdCount, int scanDepth,
                  int detail) {
     if (!scanner) return;
@@ -180,13 +193,14 @@ void initScanner(Scanner *scanner, int extCount, char **exts, int thdCount, int 
 
 void setCallbacks(Scanner *scanner,
                   void (*start)(Scanner *scanner),
-                  void (*find)(Scanner *scanner, pthread_t threadId, const char *file, off_t size,
-                               time_t modify),
-                  void (*finish)(Scanner *scanner, int isCancel)) {
+                  void (*find)(Scanner *scanner, pthread_t threadId, const char *file, off_t size, time_t modify),
+                  void (*finish)(Scanner *scanner, int isCancel),
+                  void (*recycleCallback)(Scanner *scanner)) {
     if (!scanner) return;
     scanner->onStart = start;
     scanner->onFind = find;
     scanner->onFinish = finish;
+    scanner->onRecycleCallback = recycleCallback;
 }
 
 void cancelScan(Scanner *scanner) {
@@ -218,6 +232,9 @@ int startScan(Scanner *scanner, int count, char **path) {
         freePathNodes(scanner->pathNodes);
         scanner->pathNodes = NULL;
     }
+    scanner->status = SCAN_STATUS_IDLE;
+    scanner->idleThreadCount = 0;
+    scanner->finishThreadCount = 0;
 
     //init scan dirs
     PathNode *scanNodes = NULL;
@@ -293,6 +310,9 @@ static void *threadScan(Scanner *scanner) {
                 scanner->finishThreadCount, scanner->threadCount);
             if (scanner->finishThreadCount == scanner->threadCount) {
                 scanner->onFinish(scanner, scanner->status == SCAN_STATUS_CANCEL ? 1 : 0);
+                if (scanner->recycleOnFinish) {
+                    releaseScanner(scanner);
+                }
                 logFinish();
             }
             pthread_cond_signal(scanner->cond);

@@ -49,6 +49,8 @@ typedef struct scanner {
 
     void (*onFinish)(struct scanner *scanner, int isCancel);
 
+    void (*onRecycleCallback)(struct scanner *scanner);
+
     void (*attachJVMThreadCallback)(struct scanner *scanner);
 
     void (*detachJVMThreadCallback)(struct scanner *scanner);
@@ -65,6 +67,7 @@ typedef struct scanner {
     int fetchDetail;        //是否获取文件大小,最后修改时间
     int scanHideDir;        //是否扫描隐藏目录
     int scanNoMediaDir;     //是否扫描 .nomeida 目录
+    int recycleOnFinish;
 
     struct stat fStat;
 
@@ -82,7 +85,10 @@ void myFree(void *p);
 void setThreadAttachCallback(Scanner *scanner, void (*attach)(Scanner *scanner), void (*detach)(Scanner *scanner));
 
 Scanner *createScanner();
+
 void releaseScanner(Scanner *scanner);
+
+int isScanning(Scanner *scanner);
 
 /**
  * init scanner
@@ -101,7 +107,8 @@ initScanner(Scanner *scanner, int sufCount, char **suf, int thdCount, int depth,
 void setCallbacks(Scanner *scanner,
                   void (*start)(Scanner *scanner),
                   void (*find)(Scanner *scanner, pthread_t threadId, const char *file, off_t size, time_t modify),
-                  void (*finish)(Scanner *scanner, int isCancel));
+                  void (*finish)(Scanner *scanner, int isCancel),
+                  void (*recycleCallback)(Scanner *scanner));
 
 /**
  * 开始扫描

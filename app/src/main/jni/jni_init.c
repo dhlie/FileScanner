@@ -68,7 +68,7 @@ void onDetachThread(Scanner *scanner) {
 
 void onStart(Scanner *scanner) {
     Callback *callback = (Callback *) scanner->callback;
-    if (callback && callback->glCallback && callback->onStartMethodId) {
+    if (callback && callback->javaVM && callback->glCallback && callback->onStartMethodId) {
         JNIEnv *env;
         (*callback->javaVM)->GetEnv(callback->javaVM, (void **) &env, JNI_VERSION_1_6);
         (*env)->CallVoidMethod(env, callback->glCallback, callback->onStartMethodId);
@@ -77,7 +77,7 @@ void onStart(Scanner *scanner) {
 
 void onFind(Scanner *scanner, pthread_t threadId, const char *file, off_t size, time_t modify) {
     Callback *callback = (Callback *) scanner->callback;
-    if (callback && callback->glCallback && callback->onFindMethodId) {
+    if (callback && callback->javaVM && callback->glCallback && callback->onFindMethodId) {
         JNIEnv *env;
         (*callback->javaVM)->GetEnv(callback->javaVM, (void **) &env, JNI_VERSION_1_6);
         jstring pathJStr = (*env)->NewStringUTF(env, file);
@@ -96,7 +96,21 @@ void onFinish(Scanner *scanner, int isCancel) {
             (*env)->CallVoidMethod(env, callback->glCallback, callback->onFinishMethodId,
                                    (jboolean) isCancel);
         }
-        releaseJniRef(env, scanner);
+    }
+
+}
+
+void recycleCallback(Scanner *scanner) {
+    Callback *callback = (Callback *) scanner->callback;
+    if (callback) {
+        JNIEnv *env;
+        (*callback->javaVM)->GetEnv(callback->javaVM, (void **) &env, JNI_VERSION_1_6);
+        if (callback->glCallback) {
+            (*env)->DeleteGlobalRef(env, callback->glCallback);
+            callback->glCallback = NULL;
+        }
+
+        myFree(callback);
     }
 
 }
@@ -113,12 +127,6 @@ static char *jStringToStr(JNIEnv *env, jstring jstr) {
 
 JNIEXPORT jlong jniCreate(JNIEnv *env, jobject obj) {
     Scanner *scanner = createScanner();
-
-    Callback *callback = myMalloc(sizeof(Callback));
-    memset(callback, 0, sizeof(Callback));
-    (*env)->GetJavaVM(env, &(callback->javaVM));
-    scanner->callback = callback;
-
     LOG("native scanner:jniCreate\n");
     return (jlong) scanner;
 }
@@ -126,13 +134,20 @@ JNIEXPORT jlong jniCreate(JNIEnv *env, jobject obj) {
 JNIEXPORT void jniRelease(JNIEnv *env, jobject obj, jlong handle) {
     if (!handle) return;
     Scanner *scanner = (Scanner *) handle;
-    releaseScanner(scanner);
-    LOG("native scanner:jniRelease\n");
+    scanner->recycleOnFinish = 1;
+    if (isScanning(scanner)) {
+        cancelScan(scanner);
+    } else {
+        releaseScanner(scanner);
+        LOG("native scanner:jniRelease\n");
+    }
 }
 
 JNIEXPORT void jniScanHideDir(JNIEnv *env, jobject obj, jlong handle, jboolean scan) {
     if (!handle) return;
     Scanner *scanner = (Scanner *) handle;
+    if (isScanning(scanner)) return;
+
     scanner->scanHideDir = scan;
     LOG("native scanner:jniScanHideDir:%d\n", scan);
 }
@@ -140,6 +155,8 @@ JNIEXPORT void jniScanHideDir(JNIEnv *env, jobject obj, jlong handle, jboolean s
 JNIEXPORT void jniScanNoMediaDir(JNIEnv *env, jobject obj, jlong handle, jboolean scan) {
     if (!handle) return;
     Scanner *scanner = (Scanner *) handle;
+    if (isScanning(scanner)) return;
+
     scanner->scanNoMediaDir = scan;
     LOG("native scanner:jniScanNoMediaDir:%d\n", scan);
 }
@@ -150,6 +167,7 @@ jniInitScanner(JNIEnv *env, jobject obj, jlong handle, jobjectArray sufArr, jint
                jboolean detail) {
     if (!handle) return;
     Scanner *scanner = (Scanner *) handle;
+    if (isScanning(scanner)) return;
     LOG("native scanner:jniInitScanner\n");
 
     jsize size = (*env)->GetArrayLength(env, sufArr);
@@ -167,13 +185,14 @@ jniInitScanner(JNIEnv *env, jobject obj, jlong handle, jobjectArray sufArr, jint
     }
 
     initScanner(scanner, size, exts, thdCount, depth, detail);
-    setCallbacks(scanner, onStart, onFind, onFinish);
+    setCallbacks(scanner, onStart, onFind, onFinish, recycleCallback);
     setThreadAttachCallback(scanner, onAttachThread, onDetachThread);
 }
 
 JNIEXPORT void jniStartScan(JNIEnv *env, jobject obj, jlong handle, jobjectArray jPathArr) {
     if (!handle) return;
     Scanner *scanner = (Scanner *) handle;
+    if (isScanning(scanner)) return;
     LOG("native scanner:jniStartScan\n");
 
     jsize size = (*env)->GetArrayLength(env, jPathArr);
@@ -207,16 +226,22 @@ JNIEXPORT void jniSetCallback(JNIEnv *env, jobject obj, jlong handle, jobject jC
 
     if (!handle) return;
     Scanner *scanner = (Scanner *) handle;
+    if (isScanning(scanner)) return;
     LOG("native scanner:jniSetCallback\n");
 
+    recycleCallback(scanner);
+
     if (jCallback == NULL) {
-        setCallbacks(scanner, NULL, NULL, NULL);
         return;
     }
 
-    Callback *callback = (Callback *) scanner->callback;
+    Callback *callback = myMalloc(sizeof(Callback));
+    memset(callback, 0, sizeof(Callback));
+    scanner->callback = callback;
 
+    (*env)->GetJavaVM(env, &(callback->javaVM));
     callback->glCallback = (*env)->NewGlobalRef(env, jCallback);
+
     jclass jClass = (*env)->GetObjectClass(env, jCallback);
     callback->onStartMethodId = (*env)->GetMethodID(env, jClass, "onStart", "()V");
     if (callback->onStartMethodId == NULL) {
@@ -224,8 +249,7 @@ JNIEXPORT void jniSetCallback(JNIEnv *env, jobject obj, jlong handle, jobject jC
         return;
     }
 
-    callback->onFindMethodId = (*env)->GetMethodID(env, jClass, "onFind",
-                                                   "(JLjava/lang/String;JJ)V");
+    callback->onFindMethodId = (*env)->GetMethodID(env, jClass, "onFind", "(JLjava/lang/String;JJ)V");
     if (callback->onFindMethodId == NULL) {
         LOG("native scanner:method onFind find fail\n");
         return;
@@ -236,8 +260,6 @@ JNIEXPORT void jniSetCallback(JNIEnv *env, jobject obj, jlong handle, jobject jC
         LOG("native scanner:method onFinish find fail\n");
         return;
     }
-    setCallbacks(scanner, onStart, onFind, onFinish);
-    scanner->callback = callback;
     (*env)->DeleteLocalRef(env, jClass);
 }
 
