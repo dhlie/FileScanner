@@ -109,8 +109,6 @@ public class ScannerActivity extends Activity implements View.OnClickListener {
     }
 
     String[] suffixes = new String[]{};//查找所有文件
-    //suffixes = new String[]{"mp3", "mp4", "avi", "rmvb"};
-    //suffixes = new String[]{"jpg", "jpeg", "png", "bmp", "gif"};
     suffixes = new String[]{"jpg", "jpeg", "png", "bmp", "gif", "mp3", "mp4", "avi", "rmvb", "wmv", "wma", "flav", "wav", "ogg", "mp2", "m4a", "au", "aac", "3gp", "3g2", "asf", "flv", "mov", "rm", "swf", "mpg", "EBK2", "EBK3", "TXT", "EPUB", "CHM", "UMD", "PDF", "OPUB", "DOC", "DOCX",
             "WPS", "XLS", "XLSX", "ET", "PPT", "PPTX", "DPS"};
 

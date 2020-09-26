@@ -1,5 +1,7 @@
 package d.hl.filescan;
 
+import android.util.Log;
+
 /**
  * Created by dhl on 17-8-27.
  */
@@ -38,16 +40,10 @@ public class FileScanner {
     mHandle = nativeCreate();
   }
 
-  public void recycle() {
-    if (mHandle != 0) {
-      nativeRelease(mHandle);
-      mHandle = 0;
-    }
-  }
-
   @Override
   protected void finalize() throws Throwable {
     try {
+      Log.i("dhl", "FileScanner finalize");
       if (mHandle != 0) {
         nativeRelease(mHandle);
         mHandle = 0;
