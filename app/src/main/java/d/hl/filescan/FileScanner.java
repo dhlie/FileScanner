@@ -1,7 +1,5 @@
 package d.hl.filescan;
 
-import android.util.Log;
-
 /**
  * Created by dhl on 17-8-27.
  */
@@ -42,8 +40,8 @@ public class FileScanner {
 
   @Override
   protected void finalize() throws Throwable {
-    Log.i("dhl", "FileScanner finalize");
     super.finalize();
+
     if (mHandle != 0) {
       nativeRelease(mHandle);
       mHandle = 0;
@@ -58,15 +56,11 @@ public class FileScanner {
    * @param depth         :扫描目录深度(-1时扫描所有目录)
    * @param getFileDetail :是否返回文件大小,修改日期(默认只返回文件路径)
    */
-  public void initScanner(String[] suf, int thdCount, int depth, boolean getFileDetail) {
+  public void setScanParams(String[] suf, int thdCount, int depth, boolean getFileDetail) {
     if (suf == null || thdCount < 1) {
       throw new RuntimeException("参数错误");
     }
-    nativeInitScanner(mHandle, suf, thdCount, depth, getFileDetail);
-  }
-
-  public void setScanCallback(ScanCallback cb) {
-    nativeSetCallback(mHandle, cb);
+    nativeSetScanParams(mHandle, suf, thdCount, depth, getFileDetail);
   }
 
   /**
@@ -88,13 +82,22 @@ public class FileScanner {
   }
 
   /**
-   * 扫描路径
-   * 每次开始扫描都要先设置回调,扫描结束回调自动释放
-   * @param path :要扫描的路径数组
+   * 设置扫描路径
+   * @param path 要扫描的路径数组
    */
-  public void startScan(String[] path) {
+  public void setScanPath(String[] path) {
     if (path != null && path.length > 0) {
-      nativeStartScan(mHandle, path);
+      nativeSetScanPath(mHandle, path);
+    }
+  }
+
+  /**
+   * 开始扫描
+   * @param callback
+   */
+  public void startScan(ScanCallback callback) {
+    if (callback != null) {
+      nativeStartScan(mHandle, callback);
     }
   }
 
@@ -106,15 +109,15 @@ public class FileScanner {
 
   private native void nativeRelease(long handle);
 
-  private native void nativeInitScanner(long handle, String[] suf, int thdCount, int depth, boolean getFileDetail);
+  private native void nativeSetScanParams(long handle, String[] suf, int thdCount, int depth, boolean getFileDetail);
 
   private native void nativeSetHideDirEnable(long handle, boolean enable);
 
   private native void nativeSetNoMediaDirEnable(long handle, boolean enable);
 
-  private native void nativeSetCallback(long handle, ScanCallback callback);
+  private native void nativeSetScanPath(long handle, String path[]);
 
-  private native void nativeStartScan(long handle, String path[]);
+  private native void nativeStartScan(long handle, ScanCallback callback);
 
   private native void nativeStopScan(long handle);
 

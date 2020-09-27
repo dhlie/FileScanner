@@ -151,6 +151,7 @@ void releaseScanner(Scanner *scanner) {
         openDirCount, closeDirCount);
     findCount = mallocCount = freeCount = openDirCount = closeDirCount = 0;
     pthread_mutex_unlock(&debugMutex);
+    pthread_mutex_destroy(&debugMutex);
 #endif
 }
 
@@ -164,16 +165,9 @@ int isScanning(Scanner *scanner) {
     return 0;
 }
 
-void initScanner(Scanner *scanner, int extCount, char **exts, int thdCount, int scanDepth,
-                 int detail) {
+void setScanParams(Scanner *scanner, int extCount, char **exts, int thdCount, int scanDepth, int detail) {
     if (!scanner) return;
-
-    pthread_mutex_lock(scanner->mutex);
-    if (scanner->status == SCAN_STATUS_SCAN) {
-        pthread_mutex_unlock(scanner->mutex);
-        return;
-    }
-    pthread_mutex_unlock(scanner->mutex);
+    if (isScanning(scanner)) return;
 
     if (scanner->fileExts) {
         int i;
@@ -190,49 +184,28 @@ void initScanner(Scanner *scanner, int extCount, char **exts, int thdCount, int 
     scanner->fetchDetail = detail;
 }
 
-void setCallbacks(Scanner *scanner,
-                  void (*start)(Scanner *scanner),
-                  void (*find)(Scanner *scanner, pthread_t threadId, const char *file, off_t size, time_t modify),
-                  void (*finish)(Scanner *scanner, int isCancel)) {
+void setScanHideDir(Scanner *scanner, int scan) {
     if (!scanner) return;
-    scanner->onStart = start;
-    scanner->onFind = find;
-    scanner->onFinish = finish;
+    if (isScanning(scanner)) return;
+
+    scanner->scanHideDir = scan;
 }
 
-void cancelScan(Scanner *scanner) {
+void setScanNoMediaDir(Scanner *scanner, int scan) {
     if (!scanner) return;
-    pthread_mutex_lock(scanner->mutex);
-    if (scanner->status == SCAN_STATUS_SCAN) {
-        scanner->status = SCAN_STATUS_CANCEL;
-        pthread_cond_broadcast(scanner->cond);
-    }
-    pthread_mutex_unlock(scanner->mutex);
+    if (isScanning(scanner)) return;
+
+    scanner->scanNoMediaDir = scan;
 }
 
-/**
- * 扫描路径
- * @param count : 路径个数
- * @param path : 路径数组
- */
-int startScan(Scanner *scanner, int count, char **path) {
-    if (!scanner) return -1;
-    if (!path) return -1;
-
-    pthread_mutex_lock(scanner->mutex);
-    if (scanner->status == SCAN_STATUS_SCAN) {
-        pthread_mutex_unlock(scanner->mutex);
-        return -1;
-    }
+void setScanPath(Scanner *scanner, int count, char **path) {
+    if (!scanner || !path) return;
+    if (isScanning(scanner)) return;
 
     if (scanner->pathNodes) {
         freePathNodes(scanner->pathNodes);
         scanner->pathNodes = NULL;
     }
-    scanner->status = SCAN_STATUS_IDLE;
-    scanner->createThreadCount = 0;
-    scanner->waitingThreadCount = 0;
-    scanner->exitThreadCount = 0;
 
     //init scan dirs
     PathNode *scanNodes = NULL;
@@ -258,14 +231,50 @@ int startScan(Scanner *scanner, int count, char **path) {
         scanNodes = fileNode;
     }
     scanner->pathNodes = scanNodes;
+}
 
-    //no scan dir
-    if (scanner->pathNodes == NULL) {
-        LOG("%s-%d:scan pathes init fail\n", __FILE__, __LINE__);
+void setCallbacks(Scanner *scanner,
+                  void (*start)(Scanner *scanner),
+                  void (*find)(Scanner *scanner, pthread_t threadId, const char *file, off_t size, time_t modify),
+                  void (*finish)(Scanner *scanner, int isCancel)) {
+    if (!scanner) return;
+    scanner->onStart = start;
+    scanner->onFind = find;
+    scanner->onFinish = finish;
+}
+
+void cancelScan(Scanner *scanner) {
+    if (!scanner) return;
+    pthread_mutex_lock(scanner->mutex);
+    if (scanner->exitThreadCount < scanner->createThreadCount) {
+        scanner->status = SCAN_STATUS_CANCEL;
+        pthread_cond_broadcast(scanner->cond);
+    }
+    pthread_mutex_unlock(scanner->mutex);
+}
+
+int startScan(Scanner *scanner) {
+    if (!scanner) return -1;
+
+    pthread_mutex_lock(scanner->mutex);
+    if (scanner->exitThreadCount < scanner->createThreadCount) {
         pthread_mutex_unlock(scanner->mutex);
         return -1;
     }
 
+    //not set scan dir
+    if (scanner->pathNodes == NULL) {
+        LOG("%s-%d:scan pathes is NULL\n", __FILE__, __LINE__);
+        pthread_mutex_unlock(scanner->mutex);
+        return -1;
+    }
+
+    scanner->createThreadCount = 0;
+    scanner->waitingThreadCount = 0;
+    scanner->exitThreadCount = 0;
+    scanner->recycleOnFinish = 0;
+
+    int i;
     for (i = 0; i < scanner->threadCount; i++) {
         pthread_t pt;
         if (pthread_create(&pt, NULL, threadScan, scanner)) {

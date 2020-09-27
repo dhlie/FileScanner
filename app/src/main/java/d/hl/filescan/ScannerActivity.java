@@ -93,10 +93,16 @@ public class ScannerActivity extends Activity implements View.OnClickListener {
     String deep = mETDepth.getText().toString();
     int scanDepth = Integer.parseInt(TextUtils.isEmpty(deep) ? "-1" : deep);
 
+    String sdPath = Environment.getExternalStorageDirectory().getAbsolutePath();
+    String[] scanPath = new String[]{sdPath};
+    //scanPath = new String[] {sdPath+"/Android/", sdPath+"/DCIM/"};
+
+    mFileScanner.setScanParams(suffixes, threadCount, scanDepth, mCBDetail.isChecked());
     mFileScanner.setHideDirScanEnable(mCBHideDir.isChecked());
     mFileScanner.setNoMediaDirScanEnable(mCBNoMedia.isChecked());
-    mFileScanner.initScanner(suffixes, threadCount, scanDepth, mCBDetail.isChecked());
-    mFileScanner.setScanCallback(new AbstractScanCallback() {
+    mFileScanner.setScanPath(scanPath);
+
+    mFileScanner.startScan(new AbstractScanCallback() {
       @Override
       public void onScanStart() {
         mStartTime = System.currentTimeMillis();
@@ -124,11 +130,6 @@ public class ScannerActivity extends Activity implements View.OnClickListener {
         });
       }
     });
-
-    String sdPath = Environment.getExternalStorageDirectory().getAbsolutePath();
-    String[] scanPath = new String[]{sdPath};
-    //scanPath = new String[] {sdPath+"/Android/", sdPath+"/DCIM/"};
-    mFileScanner.startScan(scanPath);
   }
 
   private class MyAdapter extends BaseAdapter {

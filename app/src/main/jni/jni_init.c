@@ -85,14 +85,12 @@ static char *jStringToStr(JNIEnv *env, jstring jstr) {
 
 JNIEXPORT jlong jniCreate(JNIEnv *env, jobject obj) {
     Scanner *scanner = createScanner();
-    LOG("native scanner:jniCreate\n");
     return (jlong) scanner;
 }
 
 JNIEXPORT void jniRelease(JNIEnv *env, jobject obj, jlong handle) {
     if (!handle) return;
     Scanner *scanner = (Scanner *) handle;
-    LOG("native scanner:jniRelease\n");
     scanner->recycleOnFinish = 1;
     if (isScanning(scanner)) {
         cancelScan(scanner);
@@ -101,32 +99,12 @@ JNIEXPORT void jniRelease(JNIEnv *env, jobject obj, jlong handle) {
     }
 }
 
-JNIEXPORT void jniScanHideDir(JNIEnv *env, jobject obj, jlong handle, jboolean scan) {
-    if (!handle) return;
-    Scanner *scanner = (Scanner *) handle;
-    if (isScanning(scanner)) return;
-
-    scanner->scanHideDir = scan;
-    LOG("native scanner:jniScanHideDir:%d\n", scan);
-}
-
-JNIEXPORT void jniScanNoMediaDir(JNIEnv *env, jobject obj, jlong handle, jboolean scan) {
-    if (!handle) return;
-    Scanner *scanner = (Scanner *) handle;
-    if (isScanning(scanner)) return;
-
-    scanner->scanNoMediaDir = scan;
-    LOG("native scanner:jniScanNoMediaDir:%d\n", scan);
-}
-
 JNIEXPORT void
-jniInitScanner(JNIEnv *env, jobject obj, jlong handle, jobjectArray sufArr, jint thdCount,
-               jint depth,
-               jboolean detail) {
+jniSetScanParams(JNIEnv *env, jobject obj, jlong handle, jobjectArray sufArr, jint thdCount,
+                 jint depth, jboolean detail) {
     if (!handle) return;
     Scanner *scanner = (Scanner *) handle;
     if (isScanning(scanner)) return;
-    LOG("native scanner:jniInitScanner\n");
 
     jsize size = (*env)->GetArrayLength(env, sufArr);
     char **exts = NULL;
@@ -142,16 +120,31 @@ jniInitScanner(JNIEnv *env, jobject obj, jlong handle, jobjectArray sufArr, jint
         (*env)->PopLocalFrame(env, NULL);
     }
 
-    initScanner(scanner, size, exts, thdCount, depth, detail);
+    setScanParams(scanner, size, exts, thdCount, depth, detail);
     setCallbacks(scanner, onStart, onFind, onFinish);
     setThreadAttachCallback(scanner, onAttachThread, onDetachThread);
 }
 
-JNIEXPORT void jniStartScan(JNIEnv *env, jobject obj, jlong handle, jobjectArray jPathArr) {
+JNIEXPORT void jniSetScanHideDir(JNIEnv *env, jobject obj, jlong handle, jboolean scan) {
     if (!handle) return;
     Scanner *scanner = (Scanner *) handle;
     if (isScanning(scanner)) return;
-    LOG("native scanner:jniStartScan\n");
+
+    setScanHideDir(scanner, scan);
+}
+
+JNIEXPORT void jniSetScanNoMediaDir(JNIEnv *env, jobject obj, jlong handle, jboolean scan) {
+    if (!handle) return;
+    Scanner *scanner = (Scanner *) handle;
+    if (isScanning(scanner)) return;
+
+    setScanNoMediaDir(scanner, scan);
+}
+
+JNIEXPORT void jniSetScanPath(JNIEnv *env, jobject obj, jlong handle, jobjectArray jPathArr) {
+    if (!handle) return;
+    Scanner *scanner = (Scanner *) handle;
+    if (isScanning(scanner)) return;
 
     jsize size = (*env)->GetArrayLength(env, jPathArr);
     if (size > 0) {
@@ -170,27 +163,24 @@ JNIEXPORT void jniStartScan(JNIEnv *env, jobject obj, jlong handle, jobjectArray
         }
         (*env)->PopLocalFrame(env, NULL);
 
-        startScan(scanner, size, pathArr);
+        setScanPath(scanner, size, pathArr);
 
         for (i = 0; i < size; i++) {
             myFree(*(pathArr + i));
         }
         myFree(pathArr);
     }
-
 }
 
-JNIEXPORT void jniSetCallback(JNIEnv *env, jobject obj, jlong handle, jobject jCallback) {
-
-    if (!handle) return;
+JNIEXPORT int jniStartScan(JNIEnv *env, jobject obj, jlong handle, jobject jCallback) {
+    if (!handle) return -1;
     Scanner *scanner = (Scanner *) handle;
-    if (isScanning(scanner)) return;
-    LOG("native scanner:jniSetCallback\n");
+    if (isScanning(scanner)) return -1;
 
     releaseCallback(scanner);
 
     if (jCallback == NULL) {
-        return;
+        return -1;
     }
 
     Callback *callback = myMalloc(sizeof(Callback));
@@ -204,27 +194,28 @@ JNIEXPORT void jniSetCallback(JNIEnv *env, jobject obj, jlong handle, jobject jC
     callback->onStartMethodId = (*env)->GetMethodID(env, jClass, "onStart", "()V");
     if (callback->onStartMethodId == NULL) {
         LOG("native scanner:method onStart find fail\n");
-        return;
+        return -1;
     }
 
     callback->onFindMethodId = (*env)->GetMethodID(env, jClass, "onFind", "(JLjava/lang/String;JJ)V");
     if (callback->onFindMethodId == NULL) {
         LOG("native scanner:method onFind find fail\n");
-        return;
+        return -1;
     }
 
     callback->onFinishMethodId = (*env)->GetMethodID(env, jClass, "onFinish", "(Z)V");
     if (callback->onFinishMethodId == NULL) {
         LOG("native scanner:method onFinish find fail\n");
-        return;
+        return -1;
     }
     (*env)->DeleteLocalRef(env, jClass);
+
+    return startScan(scanner);
 }
 
 JNIEXPORT void jniStopScan(JNIEnv *env, jobject obj, jlong handle) {
     if (!handle) return;
     Scanner *scanner = (Scanner *) handle;
-    LOG("native scanner:jniStopScan\n");
 
     cancelScan(scanner);
 }
@@ -232,16 +223,15 @@ JNIEXPORT void jniStopScan(JNIEnv *env, jobject obj, jlong handle) {
 static JNINativeMethod sScannerMethods[] = {
         {"nativeCreate",              "()J",                                              (void *) jniCreate},
         {"nativeRelease",             "(J)V",                                             (void *) jniRelease},
-        {"nativeInitScanner",         "(J[Ljava/lang/String;IIZ)V",                       (void *) jniInitScanner},
-        {"nativeSetHideDirEnable",    "(JZ)V",                                            (void *) jniScanHideDir},
-        {"nativeSetNoMediaDirEnable", "(JZ)V",                                            (void *) jniScanNoMediaDir},
-        {"nativeStartScan",           "(J[Ljava/lang/String;)V",                          (void *) jniStartScan},
-        {"nativeSetCallback",         "(JLd/hl/filescan/FileScanner$ScanCallback;)V",     (void *) jniSetCallback},
+        {"nativeSetScanParams",       "(J[Ljava/lang/String;IIZ)V",                       (void *) jniSetScanParams},
+        {"nativeSetHideDirEnable",    "(JZ)V",                                            (void *) jniSetScanHideDir},
+        {"nativeSetNoMediaDirEnable", "(JZ)V",                                            (void *) jniSetScanNoMediaDir},
+        {"nativeSetScanPath",         "(J[Ljava/lang/String;)V",                          (void *) jniSetScanPath},
+        {"nativeStartScan",           "(JLd/hl/filescan/FileScanner$ScanCallback;)V",     (void *) jniStartScan},
         {"nativeStopScan",            "(J)V",                                             (void *) jniStopScan},
 };
 
 JNIEXPORT jint JNI_OnLoad(JavaVM *vm, void *reserved) {
-    LOG("native scanner:JNI_OnLoad\n");
     JNIEnv *env = NULL;
     if ((*vm)->GetEnv(vm, (void **) &env, JNI_VERSION_1_6) != JNI_OK) {
         return -1;

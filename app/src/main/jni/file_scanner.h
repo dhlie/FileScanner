@@ -90,15 +90,36 @@ void releaseScanner(Scanner *scanner);
 int isScanning(Scanner *scanner);
 
 /**
- * init scanner
+ * set scanner params
  *  sufCount    - 要查找的文件类型的个数,0表示匹配所有文件
  *  suf         - 要查找的文件类型
  *  thdCount    - 扫描线程个数,至少1个
  *  depth       - 目录扫描深度,-1表示无限制
  *  detail      - 是否获取命中文件的大小,最后修改时间(默认只返回路径)
  * */
-void
-initScanner(Scanner *scanner, int sufCount, char **suf, int thdCount, int depth, int detail);
+void setScanParams(Scanner *scanner, int sufCount, char **suf, int thdCount, int depth, int detail);
+
+/**
+ * 是否扫描隐藏目录
+ * @param scanner
+ * @param scan
+ */
+void setScanHideDir(Scanner *scanner, int scan);
+
+/**
+ * 是否扫描 .nomedia 目录
+ * @param scanner
+ * @param scan
+ */
+void setScanNoMediaDir(Scanner *scanner, int scan);
+
+/**
+ * 设置扫描路径
+ * @param scanner
+ * @param count
+ * @param path
+ */
+void setScanPath(Scanner *scanner, int count, char **path);
 
 /**
  * 设置回调函数
@@ -110,10 +131,10 @@ void setCallbacks(Scanner *scanner,
 
 /**
  * 开始扫描
- *  path        - 扫描目录
- *  int         - 0:开始扫描 -1:未开始扫描
- * */
-int startScan(Scanner *scanner, int count, char **path);
+ * @param scanner
+ * @return 0 成功, 非 0 失败
+ */
+int startScan(Scanner *scanner);
 
 /**
  * 取消扫描
