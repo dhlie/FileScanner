@@ -92,9 +92,7 @@ JNIEXPORT void jniRelease(JNIEnv *env, jobject obj, jlong handle) {
     if (!handle) return;
     Scanner *scanner = (Scanner *) handle;
     scanner->recycleOnFinish = 1;
-    if (isScanning(scanner)) {
-        cancelScan(scanner);
-    } else {
+    if (!isScanning(scanner)) {
         releaseScanner(scanner);
     }
 }
