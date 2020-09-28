@@ -42,7 +42,7 @@ typedef struct scanner {
     pthread_cond_t *cond;
     PathNode *pathNodes;    //文件路径
 
-    //回掉函数
+    //回调函数
     void (*onStart)(struct scanner *scanner);
 
     void (*onFind)(struct scanner *scanner, pthread_t threadId, const char *file, off_t size, time_t modify);
@@ -53,7 +53,7 @@ typedef struct scanner {
 
     void (*detachJVMThreadCallback)(struct scanner *scanner);
 
-    void *callback;
+    void *jniCallbackClass;
 
     char **fileExts;        //需要扫描的文件后缀
     int extCount;           //文件类型个数

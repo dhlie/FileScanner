@@ -60,13 +60,6 @@ public class ScannerActivity extends Activity implements View.OnClickListener {
   }
 
   @Override
-  protected void onDestroy() {
-    super.onDestroy();
-    if (mFileScanner != null) mFileScanner.stopScan();
-    System.gc();
-  }
-
-  @Override
   public void onClick(View view) {
     switch (view.getId()) {
       case R.id.tv_start:
@@ -119,7 +112,7 @@ public class ScannerActivity extends Activity implements View.OnClickListener {
       public void onScanFinish(final List<FileScanner.FindItem> files, final boolean isCancel) {
         final long time = System.currentTimeMillis() - mStartTime;
         final int count = files == null ? 0 : files.size();
-        Log.i("Scanner", "Scanner java callback:  onFinish  time:" + time + "  count:" + count);
+        Log.i("scanner-native", "Scanner java callback:  onFinish  time:" + time + "  count:" + count + " isCancel:"+isCancel);
 
         runOnUiThread(new Runnable() {
           @Override
