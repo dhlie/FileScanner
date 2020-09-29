@@ -68,8 +68,6 @@ typedef struct scanner {
     int scanNoMediaDir;     //是否扫描 .nomeida 目录
     int recycleOnFinish;
 
-    struct stat fStat;
-
 } Scanner;
 
 void *myMalloc(size_t byte_count);

@@ -14,7 +14,7 @@ zl_time systemTimeMillis() {
     return tm.tv_sec * 1000 + tm.tv_usec / 1000;
 }
 
-pthread_mutex_t debugMutex;
+pthread_mutex_t debugMutex = PTHREAD_MUTEX_INITIALIZER;
 zl_time startTime;
 int mallocCount = 0;
 int freeCount = 0;
@@ -86,7 +86,6 @@ static void pushPathNode(Scanner *scanner, PathNode *pathNode);
 Scanner *createScanner() {
 
 #if DEBUG || AND_DEBUG
-    pthread_mutex_init(&debugMutex, NULL);
     pthread_mutex_lock(&debugMutex);
     findCount = mallocCount = freeCount = openDirCount = closeDirCount = 0;
     pthread_mutex_unlock(&debugMutex);
@@ -151,7 +150,6 @@ void releaseScanner(Scanner *scanner) {
         openDirCount, closeDirCount);
     findCount = mallocCount = freeCount = openDirCount = closeDirCount = 0;
     pthread_mutex_unlock(&debugMutex);
-    pthread_mutex_destroy(&debugMutex);
 #endif
 }
 
@@ -474,9 +472,13 @@ static void doFindFile(Scanner *scanner, char *dir, char *fileName) {
         strcat(path, "/");
         strcat(path, fileName);
     }
-    if (scanner->fetchDetail && stat(path, &scanner->fStat) == 0) {
-        scanner->onFind(scanner, pthread_self(), path, scanner->fStat.st_size,
-                        scanner->fStat.st_mtim.tv_sec);
+    if (scanner->fetchDetail) {
+        struct stat fStat;
+        if (stat(path, &fStat) == 0) {
+            scanner->onFind(scanner, pthread_self(), path, fStat.st_size, fStat.st_mtim.tv_sec);
+        } else {
+            scanner->onFind(scanner, pthread_self(), path, 0, 0);
+        }
     } else {
         scanner->onFind(scanner, pthread_self(), path, 0, 0);
     }
