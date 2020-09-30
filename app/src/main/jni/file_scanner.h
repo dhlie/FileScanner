@@ -53,6 +53,8 @@ typedef struct scanner {
 
     void (*detachJVMThreadCallback)(struct scanner *scanner);
 
+    void *javaVM;
+
     void *jniCallbackClass;
 
     char **fileExts;        //需要扫描的文件后缀

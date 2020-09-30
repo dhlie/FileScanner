@@ -2,7 +2,6 @@
 
 
 typedef struct callback {
-    JavaVM *javaVM;
     jobject glCallback;
     jmethodID onStartMethodId;
     jmethodID onFindMethodId;
@@ -12,9 +11,10 @@ typedef struct callback {
 void releaseCallback(Scanner *scanner) {
     Callback *callback = (Callback *) scanner->jniCallbackClass;
     if (callback) {
-        JNIEnv *env;
-        (*callback->javaVM)->GetEnv(callback->javaVM, (void **) &env, JNI_VERSION_1_6);
         if (callback->glCallback) {
+            JNIEnv *env;
+            JavaVM *javaVm = (JavaVM*)scanner->javaVM;
+            (*javaVm)->GetEnv(javaVm, (void **) &env, JNI_VERSION_1_6);
             (*env)->DeleteGlobalRef(env, callback->glCallback);
             callback->glCallback = NULL;
         }
@@ -22,38 +22,41 @@ void releaseCallback(Scanner *scanner) {
         myFree(callback);
         scanner->jniCallbackClass = NULL;
     }
-
 }
 
 void onAttachThread(Scanner *scanner) {
-    Callback *callback = (Callback *) scanner->jniCallbackClass;
-    if (callback && callback->javaVM) {
+    if (scanner->javaVM) {
         JNIEnv *env;
-        (*callback->javaVM)->AttachCurrentThread(callback->javaVM, &env, NULL);
+        LOG("AttachCurrentThread thread:%ld\n", pthread_self());
+        JavaVM *javaVm = (JavaVM*)scanner->javaVM;
+        (*javaVm)->AttachCurrentThread(javaVm, &env, NULL);
     }
 }
 
 void onDetachThread(Scanner *scanner) {
-    Callback *callback = (Callback *) scanner->jniCallbackClass;
-    if (callback && callback->javaVM) {
-        (*callback->javaVM)->DetachCurrentThread(callback->javaVM);
+    if (scanner->javaVM) {
+        LOG("DetachCurrentThread thread:%ld\n", pthread_self());
+        JavaVM *javaVm = (JavaVM*)scanner->javaVM;
+        (*javaVm)->DetachCurrentThread(javaVm);
     }
 }
 
 void onStart(Scanner *scanner) {
     Callback *callback = (Callback *) scanner->jniCallbackClass;
-    if (callback && callback->javaVM && callback->glCallback && callback->onStartMethodId) {
+    if (callback && scanner->javaVM && callback->glCallback && callback->onStartMethodId) {
         JNIEnv *env;
-        (*callback->javaVM)->GetEnv(callback->javaVM, (void **) &env, JNI_VERSION_1_6);
+        JavaVM *javaVm = (JavaVM*)scanner->javaVM;
+        (*javaVm)->GetEnv(javaVm, (void **) &env, JNI_VERSION_1_6);
         (*env)->CallVoidMethod(env, callback->glCallback, callback->onStartMethodId);
     }
 }
 
 void onFind(Scanner *scanner, pthread_t threadId, const char *file, off_t size, time_t modify) {
     Callback *callback = (Callback *) scanner->jniCallbackClass;
-    if (callback && callback->javaVM && callback->glCallback && callback->onFindMethodId) {
+    if (callback && scanner->javaVM && callback->glCallback && callback->onFindMethodId) {
         JNIEnv *env;
-        (*callback->javaVM)->GetEnv(callback->javaVM, (void **) &env, JNI_VERSION_1_6);
+        JavaVM *javaVm = (JavaVM*)scanner->javaVM;
+        (*javaVm)->GetEnv(javaVm, (void **) &env, JNI_VERSION_1_6);
         jstring pathJStr = (*env)->NewStringUTF(env, file);
         (*env)->CallVoidMethod(env, callback->glCallback, callback->onFindMethodId,
                                (jlong) threadId, pathJStr, (jlong) size, (jlong) modify);
@@ -63,9 +66,10 @@ void onFind(Scanner *scanner, pthread_t threadId, const char *file, off_t size, 
 
 void onFinish(Scanner *scanner, int isCancel) {
     Callback *callback = (Callback *) scanner->jniCallbackClass;
-    if (callback && callback->javaVM) {
+    if (callback && scanner->javaVM) {
         JNIEnv *env;
-        (*callback->javaVM)->GetEnv(callback->javaVM, (void **) &env, JNI_VERSION_1_6);
+        JavaVM *javaVm = (JavaVM*)scanner->javaVM;
+        (*javaVm)->GetEnv(javaVm, (void **) &env, JNI_VERSION_1_6);
         if (callback->glCallback && callback->onFinishMethodId) {
             (*env)->CallVoidMethod(env, callback->glCallback, callback->onFinishMethodId, (jboolean) isCancel);
         }
@@ -85,6 +89,9 @@ static char *jStringToStr(JNIEnv *env, jstring jstr) {
 
 JNIEXPORT jlong jniCreate(JNIEnv *env, jobject obj) {
     Scanner *scanner = createScanner();
+    JavaVM* javaVm;
+    (*env)->GetJavaVM(env, &javaVm);
+    scanner->javaVM = javaVm;
     return (jlong) scanner;
 }
 
@@ -185,7 +192,6 @@ JNIEXPORT int jniStartScan(JNIEnv *env, jobject obj, jlong handle, jobject jCall
     memset(callback, 0, sizeof(Callback));
     scanner->jniCallbackClass = callback;
 
-    (*env)->GetJavaVM(env, &(callback->javaVM));
     callback->glCallback = (*env)->NewGlobalRef(env, jCallback);
 
     jclass jClass = (*env)->GetObjectClass(env, jCallback);

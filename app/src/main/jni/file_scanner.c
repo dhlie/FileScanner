@@ -319,8 +319,8 @@ static void *threadScan(Scanner *scanner) {
                 if (scanner->recycleOnFinish) {
                     if (scanner->detachJVMThreadCallback) scanner->detachJVMThreadCallback(scanner);
                     releaseScanner(scanner);
+                    return NULL;
                 }
-                return NULL;
             }
             pthread_cond_signal(scanner->cond);
             pthread_mutex_unlock(scanner->mutex);
