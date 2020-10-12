@@ -43,7 +43,7 @@ Android 文件扫描器
     *;
 }
 
--keep public class * implements d.hl.filescan.FileScanner.ScanCallback {
+-keep public class * implements d.hl.filescan.FileScanner$ScanCallback {
     *;
 }
 ```
