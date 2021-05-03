@@ -119,6 +119,11 @@ public class ScannerActivity extends Activity implements View.OnClickListener {
           public void run() {
             mTVINfo.setText("files:" + count + "    time:" + time);
             mAdapter.changeData(files);
+
+            if (mFileScanner != null) {
+              mFileScanner.release();
+              mFileScanner = null;
+            }
           }
         });
       }

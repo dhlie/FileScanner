@@ -42,6 +42,10 @@ public class FileScanner {
   protected void finalize() throws Throwable {
     super.finalize();
 
+    release();
+  }
+
+  public synchronized void release() {
     if (mHandle != 0) {
       nativeRelease(mHandle);
       mHandle = 0;

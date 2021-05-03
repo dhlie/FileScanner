@@ -340,6 +340,26 @@ static void *threadScan(Scanner *scanner) {
         pthread_mutex_unlock(&debugMutex);
 #endif
 
+
+        if (!scanner->scanNoMediaDir) {
+            char nomeida[strlen(dirNode->path) + 10];
+            strcpy(nomeida, dirNode->path);
+            strcat(nomeida, "/.nomedia");
+
+            if (!access(nomeida, 0)) {
+                //LOG("ignore contains .nomedia dir:%s\n", nomeida);
+                closedir(dir);
+                freePathNodes(dirNode);
+
+#if DEBUG || AND_DEBUG
+                pthread_mutex_lock(&debugMutex);
+                closeDirCount++;
+                pthread_mutex_unlock(&debugMutex);
+#endif
+                continue;
+            }
+        }
+
         struct dirent *subFile = readdir(dir);
         while (subFile) {
             if (strcmp(subFile->d_name, ".") == 0 || strcmp(subFile->d_name, "..") == 0) {
@@ -347,12 +367,8 @@ static void *threadScan(Scanner *scanner) {
                 continue;
             }
 
-            if (!scanner->scanNoMediaDir && strcmp(subFile->d_name, ".nomedia") == 0) {
-                subFile = readdir(dir);
-                continue;
-            }
-
             if (!scanner->scanHideDir && strncmp(subFile->d_name, ".", 1) == 0) {
+                //LOG("ignore hidden dir:%s/%s\n", dirNode->path, subFile->d_name);
                 subFile = readdir(dir);
                 continue;
             }
