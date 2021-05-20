@@ -71,21 +71,24 @@
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_below="@+id/tv_thdcount"
-        android:text="文件大小"/>
+        android:textSize="12sp"
+        android:text="显示文件大小"/>
     <CheckBox
         android:id="@+id/cb_hiddir"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_below="@+id/tv_thdcount"
         android:layout_toRightOf="@+id/cb_detail"
-        android:text="隐藏目录"/>
+        android:textSize="12sp"
+        android:text="扫描隐藏目录"/>
     <CheckBox
         android:id="@+id/cb_nomedia"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_below="@+id/tv_thdcount"
         android:layout_toRightOf="@+id/cb_hiddir"
-        android:text=".nomedia"/>
+        android:textSize="12sp"
+        android:text="扫描.nomedia"/>
 
     <ListView
         android:id="@+id/lv"

@@ -1,6 +1,5 @@
 package d.hl.filescan;
 
-import android.app.Activity;
 import android.os.Bundle;
 import android.os.Environment;
 import android.text.TextUtils;
@@ -14,14 +13,13 @@ import android.widget.CheckBox;
 import android.widget.EditText;
 import android.widget.ListView;
 import android.widget.TextView;
-
+import androidx.appcompat.app.AppCompatActivity;
 import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.List;
-
 import static android.util.TypedValue.COMPLEX_UNIT_DIP;
 
-public class ScannerActivity extends Activity implements View.OnClickListener {
+public class ScannerActivity extends AppCompatActivity implements View.OnClickListener {
 
   private TextView mTVINfo;
   private EditText mETThread, mETDepth;
@@ -53,8 +51,8 @@ public class ScannerActivity extends Activity implements View.OnClickListener {
     mETDepth.setText("-1");
     mETThread.setText("4");
     mCBDetail.setChecked(true);
-    mCBHideDir.setChecked(false);
-    mCBNoMedia.setChecked(false);
+    mCBHideDir.setChecked(true);
+    mCBNoMedia.setChecked(true);
 
     startScan();
   }
@@ -72,9 +70,7 @@ public class ScannerActivity extends Activity implements View.OnClickListener {
   }
 
   private void startScan() {
-    if (mFileScanner == null) {
-      mFileScanner = new FileScanner();
-    }
+    mFileScanner = new FileScanner();
 
     String[] suffixes = new String[]{};//查找所有文件
     suffixes = new String[]{"jpg", "jpeg", "png", "bmp", "gif", "mp3", "mp4", "avi", "rmvb", "wmv", "wma", "flav", "wav", "ogg", "mp2", "m4a", "au", "aac", "3gp", "3g2", "asf", "flv", "mov", "rm", "swf", "mpg", "EBK2", "EBK3", "TXT", "EPUB", "CHM", "UMD", "PDF", "OPUB", "DOC", "DOCX",
@@ -112,12 +108,12 @@ public class ScannerActivity extends Activity implements View.OnClickListener {
       public void onScanFinish(final List<FileScanner.FindItem> files, final boolean isCancel) {
         final long time = System.currentTimeMillis() - mStartTime;
         final int count = files == null ? 0 : files.size();
-        Log.i("scanner-native", "Scanner java callback:  onFinish  time:" + time + "  count:" + count + " isCancel:"+isCancel);
 
         runOnUiThread(new Runnable() {
           @Override
           public void run() {
-            mTVINfo.setText("files:" + count + "    time:" + time);
+            String text = "files:" + count + "    time:" + time;
+            mTVINfo.setText(text);
             mAdapter.changeData(files);
 
             if (mFileScanner != null) {
@@ -166,7 +162,7 @@ public class ScannerActivity extends Activity implements View.OnClickListener {
         sb.append(md);
         sb.append("    ");
         sb.append("size:");
-        sb.append(item.size / 1024);
+        sb.append(String.format("%.2f", item.size / 1024f));
         sb.append("kb");
         tv.setText(sb.toString());
       } else {

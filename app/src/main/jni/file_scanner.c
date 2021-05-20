@@ -141,12 +141,21 @@ void releaseScanner(Scanner *scanner) {
         scanner->pathNodes = NULL;
     }
 
+#if DEBUG || AND_DEBUG
+    int createThd = scanner->createThreadCount;
+    int exitThd = scanner->exitThreadCount;
+#endif
+
     myFree(scanner);
 
 #if DEBUG || AND_DEBUG
     pthread_mutex_lock(&debugMutex);
+    int allRelease = 0;
+    if (mallocCount == freeCount && openDirCount == closeDirCount && createThd == exitThd) {
+        allRelease = 1;
+    }
     LOG("release scanner\n");
-    LOG("malloc-free count: %d - %d,  open-close dir count:%d - %d\n", mallocCount, freeCount,
+    LOG("malloc-free allRelease:%d, threadCount:%d - %d, count: %d - %d,  open-close dir count:%d - %d\n", allRelease, createThd, exitThd, mallocCount, freeCount,
         openDirCount, closeDirCount);
     findCount = mallocCount = freeCount = openDirCount = closeDirCount = 0;
     pthread_mutex_unlock(&debugMutex);
