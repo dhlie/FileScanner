@@ -70,6 +70,7 @@ public class ScannerActivity extends AppCompatActivity implements View.OnClickLi
   }
 
   private void startScan() {
+    if (mFileScanner != null) mFileScanner.stopScan();
     mFileScanner = new FileScanner();
 
     String[] suffixes = new String[]{};//查找所有文件
@@ -91,7 +92,8 @@ public class ScannerActivity extends AppCompatActivity implements View.OnClickLi
     mFileScanner.setNoMediaDirScanEnable(mCBNoMedia.isChecked());
     mFileScanner.setScanPath(scanPath);
 
-    mFileScanner.startScan(new AbstractScanCallback() {
+
+    mFileScanner.startScan(new ScanCallback(mFileScanner) {
       @Override
       public void onScanStart() {
         mStartTime = System.currentTimeMillis();
@@ -116,14 +118,18 @@ public class ScannerActivity extends AppCompatActivity implements View.OnClickLi
             mTVINfo.setText(text);
             mAdapter.changeData(files);
 
-            if (mFileScanner != null) {
-              mFileScanner.release();
-              mFileScanner = null;
-            }
+            scanner.release();
           }
         });
       }
     });
+  }
+
+  abstract class ScanCallback extends AbstractScanCallback {
+    FileScanner scanner;
+    public ScanCallback(FileScanner scanner) {
+      this.scanner = scanner;
+    }
   }
 
   private class MyAdapter extends BaseAdapter {
