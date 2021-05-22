@@ -66,13 +66,11 @@ void onFind(Scanner *scanner, pthread_t threadId, const char *file, off_t size, 
 
 void onFinish(Scanner *scanner, int isCancel) {
     Callback *callback = (Callback *) scanner->jniCallbackClass;
-    if (callback && scanner->javaVM) {
+    if (callback && scanner->javaVM && callback->glCallback && callback->onFinishMethodId) {
         JNIEnv *env;
         JavaVM *javaVm = (JavaVM*)scanner->javaVM;
         (*javaVm)->GetEnv(javaVm, (void **) &env, JNI_VERSION_1_6);
-        if (callback->glCallback && callback->onFinishMethodId) {
-            (*env)->CallVoidMethod(env, callback->glCallback, callback->onFinishMethodId, (jboolean) isCancel);
-        }
+        (*env)->CallVoidMethod(env, callback->glCallback, callback->onFinishMethodId, (jboolean) isCancel);
     }
     releaseCallback(scanner);
 }
@@ -98,10 +96,12 @@ JNIEXPORT jlong jniCreate(JNIEnv *env, jobject obj) {
 JNIEXPORT void jniRelease(JNIEnv *env, jobject obj, jlong handle) {
     if (!handle) return;
     Scanner *scanner = (Scanner *) handle;
+    pthread_mutex_lock(scanner->mutex);
     scanner->recycleOnFinish = 1;
     if (!isScanning(scanner)) {
         releaseScanner(scanner);
     }
+    pthread_mutex_unlock(scanner->mutex);
 }
 
 JNIEXPORT void

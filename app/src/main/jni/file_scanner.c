@@ -96,8 +96,11 @@ Scanner *createScanner() {
     scanner->scanNoMediaDir = 1;
     scanner->scanHideDir = 1;
 
+    pthread_mutexattr_t attr;
+    pthread_mutexattr_init(&attr);
+    pthread_mutexattr_settype(&attr, PTHREAD_MUTEX_RECURSIVE);
     scanner->mutex = myMalloc(sizeof(pthread_mutex_t));
-    if (pthread_mutex_init(scanner->mutex, NULL)) {
+    if (pthread_mutex_init(scanner->mutex, &attr)) {
         LOG("%s-%d:pthread_mutex_init fail\n", __FILE__, __LINE__);
         releaseScanner(scanner);
         return NULL;
@@ -318,19 +321,20 @@ static void *threadScan(Scanner *scanner) {
         //thread will exit
         if (!dirNode) {
             pthread_mutex_lock(scanner->mutex);
-            scanner->exitThreadCount++;
             LOG("thread:%ld exit, finished thread count:%d, total count:%d\n", pthread_self(),
                 scanner->exitThreadCount, scanner->createThreadCount);
-            if (scanner->exitThreadCount == scanner->createThreadCount) {
-                pthread_mutex_unlock(scanner->mutex);
+            if (scanner->exitThreadCount + 1 == scanner->createThreadCount) {
                 scanner->onFinish(scanner, scanner->status == SCAN_STATUS_CANCEL ? 1 : 0);
                 logFinish();
                 if (scanner->recycleOnFinish) {
                     if (scanner->detachJVMThreadCallback) scanner->detachJVMThreadCallback(scanner);
                     releaseScanner(scanner);
+                    scanner->exitThreadCount++;
+                    pthread_mutex_unlock(scanner->mutex);
                     return NULL;
                 }
             }
+            scanner->exitThreadCount++;
             pthread_cond_signal(scanner->cond);
             pthread_mutex_unlock(scanner->mutex);
             break;
