@@ -328,8 +328,8 @@ static void *threadScan(Scanner *scanner) {
                 logFinish();
                 if (scanner->recycleOnFinish) {
                     if (scanner->detachJVMThreadCallback) scanner->detachJVMThreadCallback(scanner);
-                    releaseScanner(scanner);
                     scanner->exitThreadCount++;
+                    releaseScanner(scanner);
                     pthread_mutex_unlock(scanner->mutex);
                     return NULL;
                 }

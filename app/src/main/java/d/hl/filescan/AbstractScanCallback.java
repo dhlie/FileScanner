@@ -24,7 +24,9 @@ public abstract class AbstractScanCallback implements FileScanner.ScanCallback {
     List<FileScanner.FindItem> list = mFiles.get(threadId);
     if (list == null) {
       list = new LinkedList<>();
-      mFiles.put(threadId, list);
+      synchronized (AbstractScanCallback.class) {
+        mFiles.put(threadId, list);
+      }
     }
     list.add(new FileScanner.FindItem(path, size, modify));
   }
