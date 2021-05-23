@@ -15,6 +15,10 @@ import android.widget.EditText;
 import android.widget.ListView;
 import android.widget.TextView;
 import androidx.appcompat.app.AppCompatActivity;
+
+import com.dhl.filescanner.AbstractScanCallback;
+import com.dhl.filescanner.FileScanner;
+
 import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.List;
@@ -73,7 +77,7 @@ public class ScannerActivity extends AppCompatActivity implements View.OnClickLi
   }
 
   private void startScan() {
-//    if (mFileScanner != null) mFileScanner.stopScan();
+    if (mFileScanner != null) mFileScanner.stopScan();
     mFileScanner = new FileScanner();
 
     String[] suffixes = new String[]{};//查找所有文件
@@ -97,7 +101,7 @@ public class ScannerActivity extends AppCompatActivity implements View.OnClickLi
     mFileScanner.setScanPath(scanPath);
 
 
-    mFileScanner.startScan(new ScanCallback(mFileScanner) {
+    mFileScanner.startScan(new AbstractScanCallback() {
       @Override
       public void onScanStart() {
         mStartTime = System.currentTimeMillis();
@@ -114,7 +118,6 @@ public class ScannerActivity extends AppCompatActivity implements View.OnClickLi
       public void onScanFinish(final List<FileScanner.FindItem> files, final boolean isCancel) {
         final long time = System.currentTimeMillis() - mStartTime;
         final int count = files == null ? 0 : files.size();
-        scanner.release();
 
         runOnUiThread(new Runnable() {
           @Override
@@ -126,13 +129,6 @@ public class ScannerActivity extends AppCompatActivity implements View.OnClickLi
         });
       }
     });
-  }
-
-  abstract class ScanCallback extends AbstractScanCallback {
-    FileScanner scanner;
-    public ScanCallback(FileScanner scanner) {
-      this.scanner = scanner;
-    }
   }
 
   private class MyAdapter extends BaseAdapter {

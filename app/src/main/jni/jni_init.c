@@ -266,7 +266,7 @@ static JNINativeMethod sScannerMethods[] = {
         {"nativeSetHideDirEnable",    "(JZ)V",                                            (void *) jniSetScanHideDir},
         {"nativeSetNoMediaDirEnable", "(JZ)V",                                            (void *) jniSetScanNoMediaDir},
         {"nativeSetScanPath",         "(J[Ljava/lang/String;)V",                          (void *) jniSetScanPath},
-        {"nativeStartScan",           "(JLd/hl/filescan/FileScanner$ScanCallback;)V",     (void *) jniStartScan},
+        {"nativeStartScan",           "(JLcom/dhl/filescanner/FileScanner$ScanCallback;)V",(void *) jniStartScan},
         {"nativeStopScan",            "(J)V",                                             (void *) jniStopScan},
 };
 
@@ -276,7 +276,7 @@ JNIEXPORT jint JNI_OnLoad(JavaVM *vm, void *reserved) {
         return -1;
     }
 
-    static const char *const className = "d/hl/filescan/FileScanner";
+    static const char *const className = "com/dhl/filescanner/FileScanner";
 
     jclass clazz = (*env)->FindClass(env, className);
     if (clazz == NULL) {

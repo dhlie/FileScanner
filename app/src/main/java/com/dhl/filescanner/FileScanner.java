@@ -1,4 +1,4 @@
-package d.hl.filescan;
+package com.dhl.filescanner;
 
 /**
  * Created by dhl on 17-8-27.

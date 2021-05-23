@@ -1,4 +1,4 @@
-package d.hl.filescan;
+package com.dhl.filescanner;
 
 import java.util.HashMap;
 import java.util.LinkedList;
