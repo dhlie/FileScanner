@@ -23,25 +23,16 @@ class PermissionHelper(private val activity: FragmentActivity) {
 
     private lateinit var perms: List<String>
 
-    /**
-     * 用户拒绝过权限, 需要向用户解释为什么需要相关权限
-     */
     private var onRationale: ((perms: List<String>, consumer: RationaleConsumer) -> Unit)? = null
 
-    /**
-     * 申请的所有权限都被授权了
-     */
-    private var onAllGranted: (() -> Unit)? = null
+    private var onGranted: (() -> Unit)? = null
 
-    /**
-     * 被拒绝授权的权限
-     */
-    private var onDenied: ((perms: List<String>) -> Unit)? = null
+    private var onDenied: ((perms: List<String>?, noAskAgainPerms: List<String>?) -> Unit)? = null
 
-    /**
-     * 用户选择了不在询问的权限
-     */
-    private var onNoAskAgain: ((perms: List<String>) -> Unit)? = null
+    private var intent: Intent? = null
+
+    private var intentCallback: (() -> Unit)? = null
+
     private var rationaleConsumer: RationaleConsumer? = null
     private var permissionFragment: Fragment? = null
 
@@ -56,35 +47,73 @@ class PermissionHelper(private val activity: FragmentActivity) {
         return this
     }
 
+    /**
+     * 用户拒绝过权限, 向用户解释为什么需要相关权限
+     * @param perms 拒绝过的权限
+     */
     fun rationale(onRationale: (perms: List<String>, consumer: RationaleConsumer) -> Unit): PermissionHelper {
         this.onRationale = onRationale
         rationaleConsumer = RationaleConsumer()
         return this
     }
 
-    fun onAllGranted(callback: () -> Unit): PermissionHelper {
-        onAllGranted = callback
+    /**
+     * 申请的所有权限都被授权了
+     */
+    fun onGranted(callback: () -> Unit): PermissionHelper {
+        onGranted = callback
         return this
     }
 
-    fun onDenied(callback: (perms: List<String>) -> Unit): PermissionHelper {
+    /**
+     * 被拒绝授权的权限
+     * @param deniedPerms 拒绝的权限
+     * @param noAskAgainPerms 不再询问的权限,需要到设置中打开
+     */
+    fun onDenied(callback: (deniedPerms: List<String>?, noAskAgainPerms: List<String>?) -> Unit): PermissionHelper {
         onDenied = callback
         return this
     }
 
-    fun onNoAskAgain(callback: (perms: List<String>) -> Unit): PermissionHelper {
-        onNoAskAgain = callback
+    /**
+     * 特殊权限 intent, 已有权限时返回 null(不会打开设置页面,直接回调 onIntentResult)
+     */
+    fun intentOrNull(block: () -> Intent?): PermissionHelper {
+        val intent = block.invoke()
+        this.intent = intent ?: Intent(INTENT_ACTION_PERMISSION_GRANTED)
         return this
     }
 
+    /**
+     * 特殊权限回调
+     */
+    fun onIntentResult(callback: () -> Unit): PermissionHelper {
+        intentCallback = callback
+        return this
+    }
+
+    /**
+     * 开始处理权限请求, 特殊权限和普通权限需要分开请求
+     */
     fun start() {
+        // 请求特殊权限
+        if (intent != null) {
+            if (intent?.action == INTENT_ACTION_PERMISSION_GRANTED) {
+                intentCallback?.invoke()
+            } else {
+                request()
+            }
+            return
+        }
+
+        // 请求普通权限
         if (!::perms.isInitialized) {
             throw RuntimeException("please invoke permission(...) declare required permissions")
         }
 
         if (perms.isEmpty()) {
             if (DEBUG) log("onAllGranted")
-            onAllGranted?.invoke()
+            onGranted?.invoke()
             return
         }
 
@@ -96,10 +125,10 @@ class PermissionHelper(private val activity: FragmentActivity) {
     }
 
     private fun request() {
-        permissionFragment = PermissionFragment().apply { permissionHelper = this@PermissionHelper }
+        permissionFragment = PermissionHelperFragment().apply { permissionHelper = this@PermissionHelper }
         activity.supportFragmentManager
             .beginTransaction()
-            .add(permissionFragment!!, null)
+            .add(permissionFragment!!, "PermissionHelperFragment")
             .commitAllowingStateLoss()
     }
 
@@ -145,19 +174,32 @@ class PermissionHelper(private val activity: FragmentActivity) {
         }
     }
 
-    class PermissionFragment : Fragment() {
+    class PermissionHelperFragment : Fragment() {
 
         lateinit var permissionHelper: PermissionHelper
 
         override fun onCreate(savedInstanceState: Bundle?) {
             super.onCreate(savedInstanceState)
             if (DEBUG) log("onCreate")
-            requestPermissions(permissionHelper.perms.toTypedArray(), REQUEST_CODE)
+
+            if (permissionHelper.intent != null) {
+                startActivityForResult(permissionHelper.intent, REQUEST_CODE)
+            } else {
+                requestPermissions(permissionHelper.perms.toTypedArray(), REQUEST_CODE)
+            }
         }
 
         override fun onDestroy() {
             super.onDestroy()
             if (DEBUG) log("onDestroy")
+        }
+
+        override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+            super.onActivityResult(requestCode, resultCode, data)
+            if (requestCode == REQUEST_CODE) {
+                permissionHelper.done()
+                permissionHelper.intentCallback?.invoke()
+            }
         }
 
         override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
@@ -186,22 +228,14 @@ class PermissionHelper(private val activity: FragmentActivity) {
                 }
 
                 if (deniedPerms.isNullOrEmpty() && noAskAgainPerms.isNullOrEmpty()) {
-                    permissionHelper.onAllGranted?.invoke()
+                    permissionHelper.onGranted?.invoke()
                     if (DEBUG) log("onAllGranted")
                 } else {
-                    deniedPerms?.let {
-                        permissionHelper.onDenied?.invoke(it)
-                        if (DEBUG) {
-                            val list = it.map { perm -> permissionToText(perm) }
-                            log("onDenied${list.toListString()}")
-                        }
-                    }
-                    noAskAgainPerms?.let {
-                        permissionHelper.onNoAskAgain?.invoke(it)
-                        if (DEBUG) {
-                            val list = it.map { perm -> permissionToText(perm) }
-                            log("onNoAskAgain${list.toListString()}")
-                        }
+                    permissionHelper.onDenied?.invoke(deniedPerms, noAskAgainPerms)
+                    if (DEBUG) {
+                        val list = deniedPerms?.map { perm -> permissionToText(perm) }
+                        val noAskAgainList = noAskAgainPerms?.map { perm -> permissionToText(perm) }
+                        log("onDenied:${list?.toListString()}, noAskAgain:${noAskAgainList?.toListString()}")
                     }
                 }
             }
@@ -209,21 +243,12 @@ class PermissionHelper(private val activity: FragmentActivity) {
     }
 
     companion object {
-        private const val REQUEST_CODE = 100
+        private const val REQUEST_CODE = 0x41F8
+        private const val INTENT_ACTION_PERMISSION_GRANTED = "permission.action.GRANTED"
         private const val DEBUG = true
 
         fun with(activity: FragmentActivity): PermissionHelper {
             return PermissionHelper(activity)
-        }
-
-        fun permissionToText(perm: String): String {
-            return when (perm) {
-                Manifest.permission.CAMERA -> "相机"
-                Manifest.permission.ACCESS_FINE_LOCATION -> "定位"
-                Manifest.permission.READ_EXTERNAL_STORAGE -> "读取存储卡"
-                Manifest.permission.WRITE_EXTERNAL_STORAGE -> "写入存储卡"
-                else -> perm
-            }
         }
 
         fun toAppSetting(context: Context) {
@@ -237,6 +262,16 @@ class PermissionHelper(private val activity: FragmentActivity) {
         fun log(msg: String) {
             if (DEBUG) {
                 Log.i("PermissionHelper", msg)
+            }
+        }
+
+        fun permissionToText(perm: String): String {
+            return when (perm) {
+                Manifest.permission.CAMERA -> "相机"
+                Manifest.permission.ACCESS_FINE_LOCATION -> "定位"
+                Manifest.permission.READ_EXTERNAL_STORAGE -> "读取存储卡"
+                Manifest.permission.WRITE_EXTERNAL_STORAGE -> "写入存储卡"
+                else -> perm
             }
         }
 

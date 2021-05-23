@@ -29,7 +29,7 @@ public class MainActivity extends AppCompatActivity {
           PermissionHelper.Companion.with(MainActivity.this)
                   .permission(Manifest.permission.READ_EXTERNAL_STORAGE,
                           Manifest.permission.WRITE_EXTERNAL_STORAGE)
-                  .onAllGranted(new Function0<Unit>() {
+                  .onGranted(new Function0<Unit>() {
                     @Override
                     public Unit invoke() {
                       startActivity(new Intent(getApplicationContext(), ScannerActivity.class));
@@ -38,13 +38,29 @@ public class MainActivity extends AppCompatActivity {
                   })
                   .start();
         } else {
-          if (!Environment.isExternalStorageManager()) {
-            Intent i = new Intent(Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION);
-            startActivityForResult(i, 100);
-            return;
-          }
-          startActivity(new Intent(getApplicationContext(), ScannerActivity.class));
+          PermissionHelper.Companion.with(MainActivity.this)
+                  .intentOrNull(new Function0<Intent>() {
+                    @Override
+                    public Intent invoke() {
+                      if (!Environment.isExternalStorageManager()) {
+                        return new Intent(Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION);
+                      } else {
+                        return null;
+                      }
+                    }
+                  })
+                  .onIntentResult(new Function0<Unit>() {
+                    @Override
+                    public Unit invoke() {
+                      if (Environment.isExternalStorageManager()) {
+                        startActivity(new Intent(getApplicationContext(), ScannerActivity.class));
+                      }
+                      return null;
+                    }
+                  })
+                  .start();
         }
+
       }
     });
   }

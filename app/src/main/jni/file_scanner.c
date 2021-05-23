@@ -321,8 +321,6 @@ static void *threadScan(Scanner *scanner) {
         //thread will exit
         if (!dirNode) {
             pthread_mutex_lock(scanner->mutex);
-            LOG("thread:%ld exit, finished thread count:%d, total count:%d\n", pthread_self(),
-                scanner->exitThreadCount, scanner->createThreadCount);
             if (scanner->exitThreadCount + 1 == scanner->createThreadCount) {
                 scanner->onFinish(scanner, scanner->status == SCAN_STATUS_CANCEL ? 1 : 0);
                 logFinish();
@@ -334,6 +332,7 @@ static void *threadScan(Scanner *scanner) {
                     return NULL;
                 }
             }
+            if (scanner->detachJVMThreadCallback) scanner->detachJVMThreadCallback(scanner);
             scanner->exitThreadCount++;
             pthread_cond_signal(scanner->cond);
             pthread_mutex_unlock(scanner->mutex);
@@ -418,7 +417,6 @@ static void *threadScan(Scanner *scanner) {
 #endif
 
     }
-    if (scanner->detachJVMThreadCallback) scanner->detachJVMThreadCallback(scanner);
 }
 
 static void pushPathNode(Scanner *scanner, PathNode *pathNode) {

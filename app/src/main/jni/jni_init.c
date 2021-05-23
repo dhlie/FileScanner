@@ -1,5 +1,9 @@
 #include "file_scanner.h"
 
+#if DEBUG || AND_DEBUG
+int attachCount = 0;
+int detachCount = 0;
+#endif
 
 typedef struct callback {
     jobject glCallback;
@@ -27,17 +31,38 @@ void releaseCallback(Scanner *scanner) {
 void onAttachThread(Scanner *scanner) {
     if (scanner->javaVM) {
         JNIEnv *env;
-        LOG("AttachCurrentThread thread:%ld\n", pthread_self());
         JavaVM *javaVm = (JavaVM*)scanner->javaVM;
-        (*javaVm)->AttachCurrentThread(javaVm, &env, NULL);
+
+        JavaVMAttachArgs args;
+        args.version = JNI_VERSION_1_6;
+        char name[50] = { 0 };
+        char suffix[2] = {scanner->createThreadCount + 1 + '0', '\0'};
+        strcpy(name, "fileScanner-");
+        strcat(name, suffix);
+        args.name = name;
+        args.group = NULL;
+        (*javaVm)->AttachCurrentThread(javaVm, &env, &args);
+
+#if DEBUG || AND_DEBUG
+        pthread_mutex_lock(scanner->mutex);
+        attachCount++;
+        LOG("AttachCurrentThread thread count:%d\n", attachCount);
+        pthread_mutex_unlock(scanner->mutex);
+#endif
     }
 }
 
 void onDetachThread(Scanner *scanner) {
     if (scanner->javaVM) {
-        LOG("DetachCurrentThread thread:%ld\n", pthread_self());
         JavaVM *javaVm = (JavaVM*)scanner->javaVM;
         (*javaVm)->DetachCurrentThread(javaVm);
+
+#if DEBUG || AND_DEBUG
+        pthread_mutex_lock(scanner->mutex);
+        detachCount++;
+        LOG("DetachCurrentThread thread count:%d\n", detachCount);
+        pthread_mutex_unlock(scanner->mutex);
+#endif
     }
 }
 
@@ -111,11 +136,12 @@ jniSetScanParams(JNIEnv *env, jobject obj, jlong handle, jobjectArray sufArr, ji
     Scanner *scanner = (Scanner *) handle;
     if (isScanning(scanner)) return;
 
+    (*env)->PushLocalFrame(env, 2);
     jsize size = (*env)->GetArrayLength(env, sufArr);
     char **exts = NULL;
     if (size > 0) {
+        (*env)->PushLocalFrame(env, size * 4);
         exts = (char **) myMalloc(sizeof(char *) * size);
-        (*env)->PushLocalFrame(env, size);
         int i;
         for (i = 0; i < size; i++) {
             jobject extJStr = (*env)->GetObjectArrayElement(env, sufArr, i);
@@ -128,6 +154,7 @@ jniSetScanParams(JNIEnv *env, jobject obj, jlong handle, jobjectArray sufArr, ji
     setScanParams(scanner, size, exts, thdCount, depth, detail);
     setCallbacks(scanner, onStart, onFind, onFinish);
     setThreadAttachCallback(scanner, onAttachThread, onDetachThread);
+    (*env)->PopLocalFrame(env, NULL);
 }
 
 JNIEXPORT void jniSetScanHideDir(JNIEnv *env, jobject obj, jlong handle, jboolean scan) {
@@ -151,10 +178,11 @@ JNIEXPORT void jniSetScanPath(JNIEnv *env, jobject obj, jlong handle, jobjectArr
     Scanner *scanner = (Scanner *) handle;
     if (isScanning(scanner)) return;
 
+    (*env)->PushLocalFrame(env, 2);
     jsize size = (*env)->GetArrayLength(env, jPathArr);
     if (size > 0) {
+        (*env)->PushLocalFrame(env, size * 4);
         char **pathArr = (char **) myMalloc(sizeof(char *) * size);
-        (*env)->PushLocalFrame(env, size);
         int i;
         for (i = 0; i < size; i++) {
             jobject jPathStr = (*env)->GetObjectArrayElement(env, jPathArr, i);
@@ -166,7 +194,6 @@ JNIEXPORT void jniSetScanPath(JNIEnv *env, jobject obj, jlong handle, jobjectArr
             }
             *(pathArr + i) = str;
         }
-        (*env)->PopLocalFrame(env, NULL);
 
         setScanPath(scanner, size, pathArr);
 
@@ -174,7 +201,9 @@ JNIEXPORT void jniSetScanPath(JNIEnv *env, jobject obj, jlong handle, jobjectArr
             myFree(*(pathArr + i));
         }
         myFree(pathArr);
+        (*env)->PopLocalFrame(env, NULL);
     }
+    (*env)->PopLocalFrame(env, NULL);
 }
 
 JNIEXPORT int jniStartScan(JNIEnv *env, jobject obj, jlong handle, jobject jCallback) {
@@ -188,6 +217,7 @@ JNIEXPORT int jniStartScan(JNIEnv *env, jobject obj, jlong handle, jobject jCall
         return -1;
     }
 
+    (*env)->PushLocalFrame(env, 5);
     Callback *callback = myMalloc(sizeof(Callback));
     memset(callback, 0, sizeof(Callback));
     scanner->jniCallbackClass = callback;
@@ -198,21 +228,24 @@ JNIEXPORT int jniStartScan(JNIEnv *env, jobject obj, jlong handle, jobject jCall
     callback->onStartMethodId = (*env)->GetMethodID(env, jClass, "onStart", "()V");
     if (callback->onStartMethodId == NULL) {
         LOG("native scanner:method onStart find fail\n");
+        (*env)->PopLocalFrame(env, NULL);
         return -1;
     }
 
     callback->onFindMethodId = (*env)->GetMethodID(env, jClass, "onFind", "(JLjava/lang/String;JJ)V");
     if (callback->onFindMethodId == NULL) {
         LOG("native scanner:method onFind find fail\n");
+        (*env)->PopLocalFrame(env, NULL);
         return -1;
     }
 
     callback->onFinishMethodId = (*env)->GetMethodID(env, jClass, "onFinish", "(Z)V");
     if (callback->onFinishMethodId == NULL) {
         LOG("native scanner:method onFinish find fail\n");
+        (*env)->PopLocalFrame(env, NULL);
         return -1;
     }
-    (*env)->DeleteLocalRef(env, jClass);
+    (*env)->PopLocalFrame(env, NULL);
 
     return startScan(scanner);
 }

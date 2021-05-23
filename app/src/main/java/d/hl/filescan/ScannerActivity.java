@@ -1,5 +1,6 @@
 package d.hl.filescan;
 
+import android.content.SharedPreferences;
 import android.os.Bundle;
 import android.os.Environment;
 import android.text.TextUtils;
@@ -28,6 +29,7 @@ public class ScannerActivity extends AppCompatActivity implements View.OnClickLi
   private MyAdapter mAdapter = new MyAdapter();
   private FileScanner mFileScanner;
   private long mStartTime;
+  private SharedPreferences sp;
 
   @Override
   protected void onCreate(Bundle savedInstanceState) {
@@ -48,13 +50,14 @@ public class ScannerActivity extends AppCompatActivity implements View.OnClickLi
     btnStop.setOnClickListener(this);
     lvList.setAdapter(mAdapter);
 
-    mETDepth.setText("-1");
+    sp = getSharedPreferences("prefs", MODE_PRIVATE);
+
+    mETDepth.setText(sp.getString("depth", "-1"));
     mETThread.setText("4");
     mCBDetail.setChecked(true);
     mCBHideDir.setChecked(true);
     mCBNoMedia.setChecked(true);
 
-    startScan();
   }
 
   @Override
@@ -81,6 +84,7 @@ public class ScannerActivity extends AppCompatActivity implements View.OnClickLi
     int threadCount = Integer.parseInt(TextUtils.isEmpty(thd) ? "1" : thd);
 
     String deep = mETDepth.getText().toString();
+    sp.edit().putString("depth", deep).apply();
     int scanDepth = Integer.parseInt(TextUtils.isEmpty(deep) ? "-1" : deep);
 
     String sdPath = Environment.getExternalStorageDirectory().getAbsolutePath();
