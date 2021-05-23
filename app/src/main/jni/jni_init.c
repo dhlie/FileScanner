@@ -33,15 +33,17 @@ void onAttachThread(Scanner *scanner) {
         JNIEnv *env;
         JavaVM *javaVm = (JavaVM*)scanner->javaVM;
 
-        JavaVMAttachArgs args;
-        args.version = JNI_VERSION_1_6;
-        char name[50] = { 0 };
-        char suffix[2] = {scanner->createThreadCount + 1 + '0', '\0'};
-        strcpy(name, "fileScanner-");
-        strcat(name, suffix);
-        args.name = name;
-        args.group = NULL;
-        (*javaVm)->AttachCurrentThread(javaVm, &env, &args);
+//        //设置线程名
+//        JavaVMAttachArgs args;
+//        args.version = JNI_VERSION_1_6;
+//        char name[50] = { 0 };
+//        char suffix[2] = {scanner->createThreadCount + 1 + '0', '\0'};
+//        strcpy(name, "fileScanner-");
+//        strcat(name, suffix);
+//        args.name = name;
+//        args.group = NULL;
+//        (*javaVm)->AttachCurrentThread(javaVm, &env, &args);
+        (*javaVm)->AttachCurrentThread(javaVm, &env, NULL);
 
 #if DEBUG || AND_DEBUG
         pthread_mutex_lock(scanner->mutex);
@@ -140,7 +142,7 @@ jniSetScanParams(JNIEnv *env, jobject obj, jlong handle, jobjectArray sufArr, ji
     jsize size = (*env)->GetArrayLength(env, sufArr);
     char **exts = NULL;
     if (size > 0) {
-        (*env)->PushLocalFrame(env, size * 4);
+        (*env)->PushLocalFrame(env, size);
         exts = (char **) myMalloc(sizeof(char *) * size);
         int i;
         for (i = 0; i < size; i++) {
@@ -181,7 +183,7 @@ JNIEXPORT void jniSetScanPath(JNIEnv *env, jobject obj, jlong handle, jobjectArr
     (*env)->PushLocalFrame(env, 2);
     jsize size = (*env)->GetArrayLength(env, jPathArr);
     if (size > 0) {
-        (*env)->PushLocalFrame(env, size * 4);
+        (*env)->PushLocalFrame(env, size);
         char **pathArr = (char **) myMalloc(sizeof(char *) * size);
         int i;
         for (i = 0; i < size; i++) {
