@@ -329,6 +329,7 @@ static void *threadScan(Scanner *scanner) {
                     scanner->exitThreadCount++;
                     releaseScanner(scanner);
                     pthread_mutex_unlock(scanner->mutex);
+                    pthread_detach(pthread_self());
                     return NULL;
                 }
             }
@@ -336,6 +337,7 @@ static void *threadScan(Scanner *scanner) {
             scanner->exitThreadCount++;
             pthread_cond_signal(scanner->cond);
             pthread_mutex_unlock(scanner->mutex);
+            pthread_detach(pthread_self());
             break;
         }
 
