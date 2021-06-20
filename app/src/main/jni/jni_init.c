@@ -126,9 +126,11 @@ JNIEXPORT void jniRelease(JNIEnv *env, jobject obj, jlong handle) {
     pthread_mutex_lock(scanner->mutex);
     scanner->recycleOnFinish = 1;
     if (!isScanning(scanner)) {
+        pthread_mutex_unlock(scanner->mutex);
         releaseScanner(scanner);
+    } else {
+        pthread_mutex_unlock(scanner->mutex);
     }
-    pthread_mutex_unlock(scanner->mutex);
 }
 
 JNIEXPORT void
