@@ -33,17 +33,3 @@ Android 文件扫描器
       }
     });
 ```
-
-
-
-混淆配置：
-
-```
--keep public class d.hl.filescan.FileScanner {
-    *;
-}
-
--keep public class * implements d.hl.filescan.FileScanner$ScanCallback {
-    *;
-}
-```

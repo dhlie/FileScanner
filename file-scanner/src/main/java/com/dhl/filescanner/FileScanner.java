@@ -10,7 +10,7 @@ public class FileScanner {
     System.loadLibrary("fileScanner");
   }
 
-  interface ScanCallback {
+  public interface ScanCallback {
     void onStart();
 
     void onFind(long threadId, String path, long size, long modify);
