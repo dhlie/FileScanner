@@ -134,14 +134,17 @@ JNIEXPORT void jniRelease(JNIEnv *env, jobject obj, jlong handle) {
 }
 
 JNIEXPORT void
-jniSetScanParams(JNIEnv *env, jobject obj, jlong handle, jobjectArray sufArr, jint thdCount,
+jniSetScanParams(JNIEnv *env, jobject obj, jlong handle, jobjectArray sufArr, jobjectArray filteredNoMediaSufArr, jint thdCount,
                  jint depth, jboolean detail) {
     if (!handle) return;
     Scanner *scanner = (Scanner *) handle;
     if (isScanning(scanner)) return;
 
     (*env)->PushLocalFrame(env, 2);
-    jsize size = (*env)->GetArrayLength(env, sufArr);
+    jsize size = 0;
+    if (sufArr != NULL) {
+        size = (*env)->GetArrayLength(env, sufArr);
+    }
     char **exts = NULL;
     if (size > 0) {
         (*env)->PushLocalFrame(env, size);
@@ -155,26 +158,35 @@ jniSetScanParams(JNIEnv *env, jobject obj, jlong handle, jobjectArray sufArr, ji
         (*env)->PopLocalFrame(env, NULL);
     }
 
-    setScanParams(scanner, size, exts, thdCount, depth, detail);
+    jsize filteredSize = 0;
+    if (filteredNoMediaSufArr != NULL) {
+        filteredSize = (*env)->GetArrayLength(env, filteredNoMediaSufArr);
+    }
+    char **filteredExts = NULL;
+    if (filteredSize > 0) {
+        (*env)->PushLocalFrame(env, filteredSize);
+        filteredExts = (char **) myMalloc(sizeof(char *) * filteredSize);
+        int i;
+        for (i = 0; i < filteredSize; i++) {
+            jobject extJStr = (*env)->GetObjectArrayElement(env, filteredNoMediaSufArr, i);
+            char *ext = jStringToStr(env, (jstring) extJStr);
+            *(filteredExts + i) = ext;
+        }
+        (*env)->PopLocalFrame(env, NULL);
+    }
+
+    setScanParams(scanner, size, exts, filteredSize, filteredExts, thdCount, depth, detail);
     setCallbacks(scanner, onStart, onFind, onFinish);
     setThreadAttachCallback(scanner, onAttachThread, onDetachThread);
     (*env)->PopLocalFrame(env, NULL);
 }
 
-JNIEXPORT void jniSetScanHideDir(JNIEnv *env, jobject obj, jlong handle, jboolean scan) {
+JNIEXPORT void jniSetScanHiddenEnable(JNIEnv *env, jobject obj, jlong handle, jboolean scanHidden) {
     if (!handle) return;
     Scanner *scanner = (Scanner *) handle;
     if (isScanning(scanner)) return;
 
-    setScanHideDir(scanner, scan);
-}
-
-JNIEXPORT void jniSetScanNoMediaDir(JNIEnv *env, jobject obj, jlong handle, jboolean scan) {
-    if (!handle) return;
-    Scanner *scanner = (Scanner *) handle;
-    if (isScanning(scanner)) return;
-
-    setScanNoMediaDir(scanner, scan);
+    setScanHiddenEnable(scanner, scanHidden);
 }
 
 JNIEXPORT void jniSetScanPath(JNIEnv *env, jobject obj, jlong handle, jobjectArray jPathArr) {
@@ -264,11 +276,10 @@ JNIEXPORT void jniStopScan(JNIEnv *env, jobject obj, jlong handle) {
 static JNINativeMethod sScannerMethods[] = {
         {"nativeCreate",              "()J",                                              (void *) jniCreate},
         {"nativeRelease",             "(J)V",                                             (void *) jniRelease},
-        {"nativeSetScanParams",       "(J[Ljava/lang/String;IIZ)V",                       (void *) jniSetScanParams},
-        {"nativeSetHideDirEnable",    "(JZ)V",                                            (void *) jniSetScanHideDir},
-        {"nativeSetNoMediaDirEnable", "(JZ)V",                                            (void *) jniSetScanNoMediaDir},
+        {"nativeSetScanParams",       "(J[Ljava/lang/String;[Ljava/lang/String;IIZ)V",    (void *) jniSetScanParams},
+        {"nativeSetScanHiddenEnable", "(JZ)V",                                            (void *) jniSetScanHiddenEnable},
         {"nativeSetScanPath",         "(J[Ljava/lang/String;)V",                          (void *) jniSetScanPath},
-        {"nativeStartScan",           "(JLcom/dhl/filescanner/FileScanner$ScanCallback;)V",(void *) jniStartScan},
+        {"nativeStartScan",           "(JLcom/dhl/filescanner/FileScanner$ScanCallback;)I",(void *) jniStartScan},
         {"nativeStopScan",            "(J)V",                                             (void *) jniStopScan},
 };
 

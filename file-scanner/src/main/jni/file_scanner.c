@@ -74,13 +74,17 @@ void setThreadAttachCallback(Scanner *scanner, void (*attach)(Scanner *scanner),
 
 static void *threadScan(Scanner *scanner);
 
-static void checkFileExt(Scanner *scanner, const char *dir, const char *fileName);
+static void checkFileExt(Scanner *scanner, const char *dir, const char *fileName, int isNoMediaPath);
 
 static void doFindFile(Scanner *scanner, char *dir, char *fileName);
 
 static PathNode *takePathNode(Scanner *scanner);
 
 static void pushPathNode(Scanner *scanner, PathNode *pathNode);
+
+static int isNoMediaPath(Scanner *scanner, char * path);
+
+static int filterNoMedia(Scanner *scanner, char *ext);
 
 
 Scanner *createScanner() {
@@ -93,8 +97,7 @@ Scanner *createScanner() {
 
     Scanner *scanner = myMalloc(sizeof(Scanner));
     memset(scanner, 0, sizeof(Scanner));
-    scanner->scanNoMediaDir = 1;
-    scanner->scanHideDir = 1;
+    scanner->scanHidden = 1;
 
     pthread_mutexattr_t attr;
     pthread_mutexattr_init(&attr);
@@ -125,6 +128,15 @@ void releaseScanner(Scanner *scanner) {
         }
         myFree(scanner->fileExts);
         scanner->fileExts = NULL;
+    }
+
+    if (scanner->filteredNoMediaExts) {
+        int i;
+        for (i = 0; i < scanner->filteredNoMediaExtCount; i++) {
+            myFree(*(scanner->filteredNoMediaExts + i));
+        }
+        myFree(scanner->filteredNoMediaExts);
+        scanner->filteredNoMediaExts = NULL;
     }
 
     if (scanner->mutex) {
@@ -175,7 +187,7 @@ int isScanning(Scanner *scanner) {
     return 0;
 }
 
-void setScanParams(Scanner *scanner, int extCount, char **exts, int thdCount, int scanDepth, int detail) {
+void setScanParams(Scanner *scanner, int extCount, char **exts, int filteredNoMediaExtCount, char **filteredNoMediaExts, int thdCount, int scanDepth, int detail) {
     if (!scanner) return;
     if (isScanning(scanner)) return;
 
@@ -187,25 +199,28 @@ void setScanParams(Scanner *scanner, int extCount, char **exts, int thdCount, in
         myFree(scanner->fileExts);
         scanner->fileExts = NULL;
     }
+    if (scanner->filteredNoMediaExts) {
+        int i;
+        for (i = 0; i < scanner->filteredNoMediaExtCount; i++) {
+            myFree(*(scanner->filteredNoMediaExts + i));
+        }
+        myFree(scanner->filteredNoMediaExts);
+        scanner->filteredNoMediaExts = NULL;
+    }
     scanner->extCount = extCount;
     scanner->fileExts = exts;
+    scanner->filteredNoMediaExtCount = filteredNoMediaExtCount;
+    scanner->filteredNoMediaExts = filteredNoMediaExts;
     scanner->threadCount = thdCount;
     scanner->scanDepth = scanDepth;
     scanner->fetchDetail = detail;
 }
 
-void setScanHideDir(Scanner *scanner, int scan) {
+void setScanHiddenEnable(Scanner *scanner, int scanHidden) {
     if (!scanner) return;
     if (isScanning(scanner)) return;
 
-    scanner->scanHideDir = scan;
-}
-
-void setScanNoMediaDir(Scanner *scanner, int scan) {
-    if (!scanner) return;
-    if (isScanning(scanner)) return;
-
-    scanner->scanNoMediaDir = scan;
+    scanner->scanHidden = scanHidden;
 }
 
 void setScanPath(Scanner *scanner, int count, char **path) {
@@ -236,6 +251,7 @@ void setScanPath(Scanner *scanner, int count, char **path) {
 
         fileNode->path = localDirPath;
         fileNode->depth = 1;
+        fileNode->isNoMediaPath = isNoMediaPath(scanner, localDirPath);
         fileNode->next = scanNodes;
 
         scanNodes = fileNode;
@@ -354,26 +370,6 @@ static void *threadScan(Scanner *scanner) {
         pthread_mutex_unlock(&debugMutex);
 #endif
 
-
-        if (!scanner->scanNoMediaDir) {
-            char nomeida[strlen(dirNode->path) + 10];
-            strcpy(nomeida, dirNode->path);
-            strcat(nomeida, "/.nomedia");
-
-            if (!access(nomeida, 0)) {
-                //LOG("ignore contains .nomedia dir:%s\n", nomeida);
-                closedir(dir);
-                freePathNodes(dirNode);
-
-#if DEBUG || AND_DEBUG
-                pthread_mutex_lock(&debugMutex);
-                closeDirCount++;
-                pthread_mutex_unlock(&debugMutex);
-#endif
-                continue;
-            }
-        }
-
         struct dirent *subFile = readdir(dir);
         while (subFile) {
             if (strcmp(subFile->d_name, ".") == 0 || strcmp(subFile->d_name, "..") == 0) {
@@ -381,7 +377,7 @@ static void *threadScan(Scanner *scanner) {
                 continue;
             }
 
-            if (!scanner->scanHideDir && strncmp(subFile->d_name, ".", 1) == 0) {
+            if (!scanner->scanHidden && strncmp(subFile->d_name, ".", 1) == 0) {
                 //LOG("ignore hidden dir:%s/%s\n", dirNode->path, subFile->d_name);
                 subFile = readdir(dir);
                 continue;
@@ -399,12 +395,17 @@ static void *threadScan(Scanner *scanner) {
 
                         subDir->path = fileName;
                         subDir->depth = dirNode->depth + 1;
+                        if (dirNode->isNoMediaPath == 1 || isNoMediaPath(scanner, fileName)) {
+                            subDir->isNoMediaPath = 1;
+                        } else {
+                            subDir->isNoMediaPath = 0;
+                        }
 
                         pushPathNode(scanner, subDir);
                     }
                 }
             } else if (subFile->d_type == DT_REG) {
-                checkFileExt(scanner, dirNode->path, subFile->d_name);
+                checkFileExt(scanner, dirNode->path, subFile->d_name, dirNode->isNoMediaPath);
             }
 
             subFile = readdir(dir);
@@ -419,6 +420,25 @@ static void *threadScan(Scanner *scanner) {
 #endif
 
     }
+}
+
+/**
+ * 目录中是否有 .nomeida 文件
+ * @param path
+ * @return
+ */
+static int isNoMediaPath(Scanner *scanner, char * path) {
+    if (scanner->filteredNoMediaExtCount < 1) {
+        return 0;
+    }
+    char nomeida[strlen(path) + 10];
+    strcpy(nomeida, path);
+    strcat(nomeida, "/.nomedia");
+
+    if (access(nomeida, F_OK) == 0) {
+        return 1;
+    }
+    return 0;
 }
 
 static void pushPathNode(Scanner *scanner, PathNode *pathNode) {
@@ -467,8 +487,9 @@ static PathNode *takePathNode(Scanner *scanner) {
  * 检查文件类型
  * @param dir       :目录名,
  * @param fileName  :文件名,目录名为NULL时文件名为全路径
+ * @param isNoMediaPath  :是否是 nomedia path
  */
-static void checkFileExt(Scanner *scanner, const char *dir, const char *fileName) {
+static void checkFileExt(Scanner *scanner, const char *dir, const char *fileName, int isNoMediaPath) {
     if (fileName == NULL) return;
 
     if (!scanner->extCount) {
@@ -482,10 +503,30 @@ static void checkFileExt(Scanner *scanner, const char *dir, const char *fileName
     int i;
     for (i = 0; i < scanner->extCount; i++) {
         if (strcasecmp(ext + 1, *(scanner->fileExts + i)) == 0) {
+            if (isNoMediaPath && scanner->filteredNoMediaExtCount && filterNoMedia(scanner, ext)) {
+                break;
+            }
+
             doFindFile(scanner, dir, fileName);
             break;
         }
     }
+}
+
+/**
+ * 是否过滤掉
+ * @param scanner
+ * @param ext 文件后缀,包含'.'
+ * @return
+ */
+static int filterNoMedia(Scanner *scanner, char *ext) {
+    int i;
+    for (i = 0; i < scanner->filteredNoMediaExtCount; i++) {
+        if (strcasecmp(ext + 1, *(scanner->filteredNoMediaExts + i)) == 0) {
+            return 1;
+        }
+    }
+    return 0;
 }
 
 /**

@@ -88,7 +88,7 @@
         android:layout_below="@+id/tv_thdcount"
         android:layout_toRightOf="@+id/cb_hiddir"
         android:textSize="12sp"
-        android:text="扫描.nomedia"/>
+        android:text="过滤.nomedia"/>
 
     <ListView
         android:id="@+id/lv"

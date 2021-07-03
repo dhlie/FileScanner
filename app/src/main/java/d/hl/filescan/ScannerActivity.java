@@ -4,25 +4,28 @@ import android.content.SharedPreferences;
 import android.os.Bundle;
 import android.os.Environment;
 import android.text.TextUtils;
-import android.util.Log;
-import android.util.TypedValue;
+import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.BaseAdapter;
 import android.widget.Button;
 import android.widget.CheckBox;
 import android.widget.EditText;
+import android.widget.ImageView;
 import android.widget.ListView;
 import android.widget.TextView;
+
 import androidx.appcompat.app.AppCompatActivity;
 
+import com.bumptech.glide.Glide;
 import com.dhl.filescanner.AbstractScanCallback;
 import com.dhl.filescanner.FileScanner;
 
 import java.text.SimpleDateFormat;
+import java.util.Collections;
+import java.util.Comparator;
 import java.util.Date;
 import java.util.List;
-import static android.util.TypedValue.COMPLEX_UNIT_DIP;
 
 public class ScannerActivity extends AppCompatActivity implements View.OnClickListener {
 
@@ -81,8 +84,12 @@ public class ScannerActivity extends AppCompatActivity implements View.OnClickLi
     mFileScanner = new FileScanner();
 
     String[] suffixes = new String[]{};//查找所有文件
-    suffixes = new String[]{"jpg", "jpeg", "png", "bmp", "gif", "mp3", "mp4", "avi", "rmvb", "wmv", "wma", "flav", "wav", "ogg", "mp2", "m4a", "au", "aac", "3gp", "3g2", "asf", "flv", "mov", "rm", "swf", "mpg", "EBK2", "EBK3", "TXT", "EPUB", "CHM", "UMD", "PDF", "OPUB", "DOC", "DOCX",
-            "WPS", "XLS", "XLSX", "ET", "PPT", "PPTX", "DPS"};
+    suffixes = new String[]{"jpg", "jpeg", "png", "bmp", "gif", "DOC", "DOCX", "WPS", "XLS", "XLSX", "ET", "PPT", "PPTX"};
+
+    String[] filteredsuffixes = null;
+    if (mCBNoMedia.isChecked()) {
+      filteredsuffixes = new String[]{"jpg", "jpeg", "png", "bmp", "gif"};
+    }
 
     String thd = mETThread.getText().toString();
     int threadCount = Integer.parseInt(TextUtils.isEmpty(thd) ? "1" : thd);
@@ -95,9 +102,8 @@ public class ScannerActivity extends AppCompatActivity implements View.OnClickLi
     String[] scanPath = new String[]{sdPath};
     //scanPath = new String[] {sdPath+"/Android/", sdPath+"/DCIM/"};
 
-    mFileScanner.setScanParams(suffixes, threadCount, scanDepth, mCBDetail.isChecked());
-    mFileScanner.setHideDirScanEnable(mCBHideDir.isChecked());
-    mFileScanner.setNoMediaDirScanEnable(mCBNoMedia.isChecked());
+    mFileScanner.setScanParams(suffixes, filteredsuffixes, threadCount, scanDepth, mCBDetail.isChecked());
+    mFileScanner.setScanHiddenEnable(mCBHideDir.isChecked());
     mFileScanner.setScanPath(scanPath);
 
 
@@ -124,6 +130,15 @@ public class ScannerActivity extends AppCompatActivity implements View.OnClickLi
           public void run() {
             String text = "files:" + count + "    time:" + time;
             mTVINfo.setText(text);
+
+            if (files != null && files.size() > 0) {
+              Collections.sort(files, new Comparator<FileScanner.FindItem>() {
+                @Override
+                public int compare(FileScanner.FindItem o1, FileScanner.FindItem o2) {
+                  return (int) (o2.modifyTime - o1.modifyTime);
+                }
+              });
+            }
             mAdapter.changeData(files);
           }
         });
@@ -149,14 +164,16 @@ public class ScannerActivity extends AppCompatActivity implements View.OnClickLi
 
     @Override
     public View getView(int i, View view, ViewGroup viewGroup) {
-      TextView tv;
       if (view == null) {
-        tv = new TextView(ScannerActivity.this);
-        int dp8 = (int) TypedValue.applyDimension(COMPLEX_UNIT_DIP, 8, getResources().getDisplayMetrics());
-        tv.setPadding(dp8, dp8, dp8, dp8);
-      } else {
-        tv = (TextView) view;
+        view = LayoutInflater.from(getApplicationContext()).inflate(R.layout.scan_item, viewGroup, false);
       }
+
+      TextView tv = view.findViewById(R.id.tvName);
+      ImageView iv = view.findViewById(R.id.ivImg);
+
+
+
+
       FileScanner.FindItem item = mData.get(i);
       if (mCBDetail.isChecked()) {
         StringBuilder sb = new StringBuilder();
@@ -173,7 +190,9 @@ public class ScannerActivity extends AppCompatActivity implements View.OnClickLi
       } else {
         tv.setText(item.path.substring(item.path.lastIndexOf('/') + 1));
       }
-      return tv;
+
+      Glide.with(iv).load(item.path).into(iv);
+      return view;
     }
 
     @Override

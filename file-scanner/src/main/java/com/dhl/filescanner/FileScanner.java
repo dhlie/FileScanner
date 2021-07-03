@@ -55,34 +55,27 @@ public class FileScanner {
   /**
    * 初始化扫描器
    *
-   * @param suf           :要扫描的文件后缀(不区分大小写,不带'.'),空数组表示查找所有文件,不能为null
+   * @param suf           :要扫描的文件后缀(不区分大小写,不带'.'), null 或 空数组表示查找所有文件
+   * @param filteredNoMediaSuf: nomedia 目录过滤掉的文件类型, null 或 空数组表示不过滤,
+   *                          nomedia 目录是当前目录或任何父级目录中有 .nomedia 文件的目录
    * @param thdCount      :扫描线程数
    * @param depth         :扫描目录深度(-1时扫描所有目录)
    * @param getFileDetail :是否返回文件大小,修改日期(默认只返回文件路径)
    */
-  public void setScanParams(String[] suf, int thdCount, int depth, boolean getFileDetail) {
-    if (suf == null || thdCount < 1) {
+  public void setScanParams(String[] suf, String[] filteredNoMediaSuf, int thdCount, int depth, boolean getFileDetail) {
+    if (thdCount < 1) {
       throw new RuntimeException("参数错误");
     }
-    nativeSetScanParams(mHandle, suf, thdCount, depth, getFileDetail);
+    nativeSetScanParams(mHandle, suf, filteredNoMediaSuf, thdCount, depth, getFileDetail);
   }
 
   /**
    * 是否扫描隐藏目录, 默认 true
    *
-   * @param scanEnable
+   * @param scanHidden
    */
-  public void setHideDirScanEnable(boolean scanEnable) {
-    nativeSetHideDirEnable(mHandle, scanEnable);
-  }
-
-  /**
-   * 是否扫描 .nomedia 目录, 默认 true
-   *
-   * @param scanEnable
-   */
-  public void setNoMediaDirScanEnable(boolean scanEnable) {
-    nativeSetNoMediaDirEnable(mHandle, scanEnable);
+  public void setScanHiddenEnable(boolean scanHidden) {
+    nativeSetScanHiddenEnable(mHandle, scanHidden);
   }
 
   /**
@@ -113,15 +106,13 @@ public class FileScanner {
 
   private native void nativeRelease(long handle);
 
-  private native void nativeSetScanParams(long handle, String[] suf, int thdCount, int depth, boolean getFileDetail);
+  private native void nativeSetScanParams(long handle, String[] suf, String[] filteredNoMediaSuf, int thdCount, int depth, boolean getFileDetail);
 
-  private native void nativeSetHideDirEnable(long handle, boolean enable);
-
-  private native void nativeSetNoMediaDirEnable(long handle, boolean enable);
+  private native void nativeSetScanHiddenEnable(long handle, boolean enable);
 
   private native void nativeSetScanPath(long handle, String path[]);
 
-  private native void nativeStartScan(long handle, ScanCallback callback);
+  private native int nativeStartScan(long handle, ScanCallback callback);
 
   private native void nativeStopScan(long handle);
 

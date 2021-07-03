@@ -10,6 +10,7 @@
 #include <stdlib.h>
 #include <pthread.h>
 #include <jni.h>
+#include <unistd.h>
 
 #define AND_DEBUG   0
 #define DEBUG       0
@@ -33,8 +34,9 @@
 
 typedef struct path_node {
     struct path_node *next;
-    int depth;
     char *path;
+    int depth;
+    int isNoMediaPath;// 0或1, 是否是 nomedia 目录. nomedia 目录是当前目录或任何父级目录中有 .nomedia 文件的目录
 } PathNode;
 
 typedef struct scanner {
@@ -58,7 +60,9 @@ typedef struct scanner {
     void *jniCallbackClass;
 
     char **fileExts;        //需要扫描的文件后缀
+    char **filteredNoMediaExts;//nomeida 过滤类型
     int extCount;           //文件类型个数
+    int filteredNoMediaExtCount;//nomeida 过滤类型个数
     int threadCount;        //扫描线程数
     int createThreadCount;  //实际创建成功的线程数
     int waitingThreadCount; //等待状态的线程数
@@ -66,8 +70,7 @@ typedef struct scanner {
     int scanDepth;          //目录扫描深度
     int status;             //扫描状态
     int fetchDetail;        //是否获取文件大小,最后修改时间
-    int scanHideDir;        //是否扫描隐藏目录
-    int scanNoMediaDir;     //是否扫描 .nomeida 目录
+    int scanHidden;         //是否扫描隐藏目录和文件
     int recycleOnFinish;
 
 } Scanner;
@@ -91,27 +94,22 @@ int isScanning(Scanner *scanner);
 
 /**
  * set scanner params
- *  sufCount    - 要查找的文件类型的个数,0表示匹配所有文件
- *  suf         - 要查找的文件类型
- *  thdCount    - 扫描线程个数,至少1个
- *  depth       - 目录扫描深度,-1表示无限制
- *  detail      - 是否获取命中文件的大小,最后修改时间(默认只返回路径)
+ *  extCount                    - 要查找的文件类型的个数,0表示匹配所有文件
+ *  exts                        - 要查找的文件类型
+ *  filteredNoMediaExtCount     - .nomedia 所在目录要过滤掉的文件类型个数
+ *  filteredNoMediaExts         - .nomedia 所在目录要过滤掉的文件类型
+ *  thdCount                    - 扫描线程个数,至少1个
+ *  scanDepth                   - 目录扫描深度,-1表示无限制
+ *  detail                      - 是否获取命中文件的大小,最后修改时间(默认只返回路径)
  * */
-void setScanParams(Scanner *scanner, int sufCount, char **suf, int thdCount, int depth, int detail);
+void setScanParams(Scanner *scanner, int extCount, char **exts, int filteredNoMediaExtCount, char **filteredNoMediaExts, int thdCount, int scanDepth, int detail);
 
 /**
- * 是否扫描隐藏目录
+ * 是否扫描隐藏目录或文件
  * @param scanner
  * @param scan
  */
-void setScanHideDir(Scanner *scanner, int scan);
-
-/**
- * 是否扫描 .nomedia 目录
- * @param scanner
- * @param scan
- */
-void setScanNoMediaDir(Scanner *scanner, int scan);
+void setScanHiddenEnable(Scanner *scanner, int scan);
 
 /**
  * 设置扫描路径
