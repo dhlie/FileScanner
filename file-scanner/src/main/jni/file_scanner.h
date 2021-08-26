@@ -47,7 +47,7 @@ typedef struct scanner {
     //回调函数
     void (*onStart)(struct scanner *scanner);
 
-    void (*onFind)(struct scanner *scanner, pthread_t threadId, const char *file, off_t size, time_t modify);
+    void (*onFind)(struct scanner *scanner, pthread_t threadId, const char *file, int64_t size, time_t modify);
 
     void (*onFinish)(struct scanner *scanner, int isCancel);
 

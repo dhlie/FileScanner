@@ -78,7 +78,7 @@ void onStart(Scanner *scanner) {
     }
 }
 
-void onFind(Scanner *scanner, pthread_t threadId, const char *file, off_t size, time_t modify) {
+void onFind(Scanner *scanner, pthread_t threadId, const char *file, int64_t size, time_t modify) {
     Callback *callback = (Callback *) scanner->jniCallbackClass;
     if (callback && scanner->javaVM && callback->glCallback && callback->onFindMethodId) {
         JNIEnv *env;
